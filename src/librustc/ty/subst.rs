@@ -122,8 +122,8 @@ impl<'a, 'tcx> Lift<'tcx> for Kind<'a> {
 
     fn lift_to_tcx<'cx, 'gcx>(&self, tcx: TyCtxt<'cx, 'gcx, 'tcx>) -> Option<Self::Lifted> {
         match self.unpack() {
-            UnpackedKind::Lifetime(a) => a.lift_to_tcx(tcx).map(|a| a.into()),
-            UnpackedKind::Type(a) => a.lift_to_tcx(tcx).map(|a| a.into()),
+            UnpackedKind::Lifetime(a) => tcx.lift(&a).map(|a| a.into()),
+            UnpackedKind::Type(a) => tcx.lift(&a).map(|a| a.into()),
         }
     }
 }

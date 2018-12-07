@@ -973,7 +973,7 @@ impl<'a, 'gcx, 'tcx> Generics {
 }
 
 /// Bounds on generics.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct GenericPredicates<'tcx> {
     pub parent: Option<DefId>,
     pub predicates: Vec<(Predicate<'tcx>, Span)>,
@@ -1475,7 +1475,7 @@ impl<'tcx> Predicate<'tcx> {
 /// `[[], [U:Bar<T>]]`.  Now if there were some particular reference
 /// like `Foo<isize,usize>`, then the `InstantiatedPredicates` would be `[[],
 /// [usize:Bar<isize>]]`.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct InstantiatedPredicates<'tcx> {
     pub predicates: Vec<Predicate<'tcx>>,
 }

@@ -47,7 +47,10 @@ CloneTypeFoldableAndLiftImpls! {
     // really meant to be folded. In general, we can only fold a fully
     // general `Region`.
     ::ty::BoundRegion,
+    ::ty::Placeholder<::ty::BoundRegion>,
     ::ty::ClosureKind,
+    ::ty::FreeRegion,
+    ::ty::InferTy,
     ::ty::IntVarValue,
     ::ty::ParamTy,
     ::ty::UniverseIndex,
@@ -473,6 +476,13 @@ impl<'a, 'tcx> Lift<'tcx> for ty::InstanceDef<'a> {
 }
 
 BraceStructLiftImpl! {
+    impl<'a, 'tcx> Lift<'tcx> for ty::TypeAndMut<'a> {
+        type Lifted = ty::TypeAndMut<'tcx>;
+        ty, mutbl
+    }
+}
+
+BraceStructLiftImpl! {
     impl<'a, 'tcx> Lift<'tcx> for ty::Instance<'a> {
         type Lifted = ty::Instance<'tcx>;
         def, substs
@@ -483,6 +493,16 @@ BraceStructLiftImpl! {
     impl<'a, 'tcx> Lift<'tcx> for interpret::GlobalId<'a> {
         type Lifted = interpret::GlobalId<'tcx>;
         instance, promoted
+    }
+}
+
+// FIXME(eddyb) this is like what `CloneTypeFoldableAndLiftImpls!`
+// generates, except that macro *also* generates a foldable impl,
+// which we don't want (with it we'd risk bypassing `fold_region`).
+impl<'tcx> Lift<'tcx> for ty::RegionKind {
+    type Lifted = ty::RegionKind;
+    fn lift_to_tcx<'b, 'gcx>(&self, _: TyCtxt<'b, 'gcx, 'tcx>) -> Option<Self::Lifted> {
+        Some(self.clone())
     }
 }
 
