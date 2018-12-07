@@ -847,10 +847,11 @@ impl<'a, 'gcx, 'tcx> InferCtxt<'a, 'gcx, 'tcx> {
                     _ => vec![ArgKind::empty()],
                 };
 
-                let expected = match expected_trait_ref.skip_binder().substs.type_at(1).sty {
+                let expected_ty = expected_trait_ref.skip_binder().substs.type_at(1);
+                let expected = match expected_ty.sty {
                     ty::Tuple(ref tys) => tys.iter()
                         .map(|t| ArgKind::from_expected_ty(t, Some(span))).collect(),
-                    ref sty => vec![ArgKind::Arg("_".to_owned(), sty.to_string())],
+                    _ => vec![ArgKind::Arg("_".to_owned(), expected_ty.to_string())],
                 };
 
                 if found.len() == expected.len() {
@@ -1640,10 +1641,10 @@ impl ArgKind {
             ty::Tuple(ref tys) => ArgKind::Tuple(
                 span,
                 tys.iter()
-                   .map(|ty| ("_".to_owned(), ty.sty.to_string()))
+                   .map(|ty| ("_".to_owned(), ty.to_string()))
                    .collect::<Vec<_>>()
             ),
-            _ => ArgKind::Arg("_".to_owned(), t.sty.to_string()),
+            _ => ArgKind::Arg("_".to_owned(), t.to_string()),
         }
     }
 }
