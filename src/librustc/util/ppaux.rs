@@ -1,7 +1,7 @@
 use hir::def_id::DefId;
 use hir::map::definitions::DefPathData;
 use middle::region;
-use ty::subst::{Subst, Substs};
+use ty::subst::{Kind, Subst, Substs, UnpackedKind};
 use ty::{BrAnon, BrEnv, BrFresh, BrNamed};
 use ty::{Bool, Char, Adt};
 use ty::{Error, Str, Array, Slice, Float, FnDef, FnPtr};
@@ -1456,6 +1456,23 @@ define_print! {
                 ty::Predicate::ConstEvaluatable(def_id, substs) => {
                     write!(f, "ConstEvaluatable({:?}, {:?})", def_id, substs)
                 }
+            }
+        }
+    }
+}
+
+define_print! {
+    ('tcx) Kind<'tcx>, (self, f, cx) {
+        display {
+            match self.unpack() {
+                UnpackedKind::Lifetime(lt) => print!(f, cx, print(lt)),
+                UnpackedKind::Type(ty) => print!(f, cx, print(ty)),
+            }
+        }
+        debug {
+            match self.unpack() {
+                UnpackedKind::Lifetime(lt) => print!(f, cx, print(lt)),
+                UnpackedKind::Type(ty) => print!(f, cx, print(ty)),
             }
         }
     }
