@@ -92,7 +92,7 @@ use rustc::hir::Node;
 use rustc::hir::CodegenFnAttrFlags;
 use rustc::hir::map::definitions::DefPathData;
 use rustc::ich::NodeIdHashingMode;
-use rustc::ty::item_path::{self, ItemPathBuffer, RootMode};
+use rustc::ty::item_path::{self, ItemPathPrinter, RootMode};
 use rustc::ty::query::Providers;
 use rustc::ty::subst::Substs;
 use rustc::ty::{self, Ty, TyCtxt, TypeFoldable};
@@ -221,11 +221,9 @@ fn get_symbol_hash<'a, 'tcx>(
 }
 
 fn def_symbol_name<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, def_id: DefId) -> ty::SymbolName {
-    let mut buffer = SymbolPathBuffer::new();
     item_path::with_forced_absolute_paths(|| {
-        tcx.push_item_path(&mut buffer, def_id);
-    });
-    buffer.into_interned()
+        tcx.push_item_path(&mut SymbolPath, def_id).into_interned()
+    })
 }
 
 fn symbol_name<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, instance: Instance<'tcx>) -> ty::SymbolName {
@@ -317,7 +315,7 @@ fn compute_symbol_name<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, instance: Instance
 
     let hash = get_symbol_hash(tcx, def_id, instance, instance_ty, substs);
 
-    let mut buf = SymbolPathBuffer::from_interned(tcx.def_symbol_name(def_id));
+    let mut buf = SymbolPath::from_interned(tcx.def_symbol_name(def_id));
 
     if instance.is_vtable_shim() {
         buf.push("{{vtable-shim}}");
@@ -340,14 +338,14 @@ fn compute_symbol_name<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, instance: Instance
 // To be able to work on all platforms and get *some* reasonable output, we
 // use C++ name-mangling.
 #[derive(Debug)]
-struct SymbolPathBuffer {
+struct SymbolPath {
     result: String,
     temp_buf: String,
 }
 
-impl SymbolPathBuffer {
+impl SymbolPath {
     fn new() -> Self {
-        let mut result = SymbolPathBuffer {
+        let mut result = SymbolPath {
             result: String::with_capacity(64),
             temp_buf: String::with_capacity(16),
         };
@@ -356,7 +354,7 @@ impl SymbolPathBuffer {
     }
 
     fn from_interned(symbol: ty::SymbolName) -> Self {
-        let mut result = SymbolPathBuffer {
+        let mut result = SymbolPath {
             result: String::with_capacity(64),
             temp_buf: String::with_capacity(16),
         };
@@ -368,19 +366,6 @@ impl SymbolPathBuffer {
         ty::SymbolName {
             name: Symbol::intern(&self.result).as_interned_str(),
         }
-    }
-
-    fn finish(mut self, hash: u64) -> String {
-        // E = end name-sequence
-        let _ = write!(self.result, "17h{:016x}E", hash);
-        self.result
-    }
-}
-
-impl ItemPathBuffer for SymbolPathBuffer {
-    fn root_mode(&self) -> &RootMode {
-        const ABSOLUTE: &RootMode = &RootMode::Absolute;
-        ABSOLUTE
     }
 
     fn push(&mut self, text: &str) {
@@ -395,6 +380,40 @@ impl ItemPathBuffer for SymbolPathBuffer {
             self.result.push('_');
         }
         self.result.push_str(&self.temp_buf);
+    }
+
+    fn finish(mut self, hash: u64) -> String {
+        // E = end name-sequence
+        let _ = write!(self.result, "17h{:016x}E", hash);
+        self.result
+    }
+}
+
+#[derive(Debug)]
+struct SymbolPathPrinter;
+
+impl ItemPathPrinter for SymbolPathPrinter {
+    type Path = SymbolPath;
+
+    fn root_mode(&self) ->RootMode {
+        RootMode::Absolute
+    }
+
+    fn path_crate(&self, name: Option<&str>) -> Self::Path {
+        let mut path = SymbolPath::new();
+        if let Some(name) = name {
+            path.push(name);
+        }
+        path
+    }
+    fn path_impl(&self, text: &str) -> Self::Path {
+        let mut path = SymbolPath::new();
+        path.push(text);
+        path
+    }
+    fn path_append(&self, mut path: Self::Path, text: &str) -> Self::Path {
+        path.push(text);
+        path
     }
 }
 
