@@ -223,8 +223,7 @@ fn get_symbol_hash<'a, 'tcx>(
 
 fn def_symbol_name<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, def_id: DefId) -> ty::SymbolName {
     item_path::with_forced_absolute_paths(|| {
-        let mut cx = PrintCx::new(tcx);
-        SymbolPathPrinter::print_item_path(&mut cx, def_id).into_interned()
+        PrintCx::new(tcx, SymbolPathPrinter).print_item_path(def_id).into_interned()
     })
 }
 
@@ -396,17 +395,21 @@ struct SymbolPathPrinter;
 impl ItemPathPrinter for SymbolPathPrinter {
     type Path = SymbolPath;
 
-    fn path_crate(cx: &mut PrintCx<'_, '_, '_>, cnum: CrateNum) -> Self::Path {
+    fn path_crate(self: &mut PrintCx<'_, '_, '_, Self>, cnum: CrateNum) -> Self::Path {
         let mut path = SymbolPath::new();
-        path.push(&cx.tcx.original_crate_name(cnum).as_str());
+        path.push(&self.tcx.original_crate_name(cnum).as_str());
         path
     }
-    fn path_impl(text: &str) -> Self::Path {
+    fn path_impl(self: &mut PrintCx<'_, '_, '_, Self>, text: &str) -> Self::Path {
         let mut path = SymbolPath::new();
         path.push(text);
         path
     }
-    fn path_append(mut path: Self::Path, text: &str) -> Self::Path {
+    fn path_append(
+        self: &mut PrintCx<'_, '_, '_, Self>,
+        mut path: Self::Path,
+        text: &str,
+    ) -> Self::Path {
         path.push(text);
         path
     }
