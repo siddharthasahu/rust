@@ -53,6 +53,7 @@ CloneTypeFoldableAndLiftImpls! {
     ::ty::InferTy,
     ::ty::IntVarValue,
     ::ty::ParamTy,
+    ::ty::RegionVid,
     ::ty::UniverseIndex,
     ::ty::Variance,
     ::syntax_pos::Span,
