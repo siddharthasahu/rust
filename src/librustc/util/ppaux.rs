@@ -395,20 +395,15 @@ impl PrintCx<'a, 'gcx, 'tcx> {
                         continue;
                     }
                     start_or_continue(f, start, ", ")?;
-                    if self.is_verbose {
-                        write!(f, "{:?}", region)?;
+                    if !region.display_outputs_anything(self) {
+                        // This happens when the value of the region
+                        // parameter is not easily serialized. This may be
+                        // because the user omitted it in the first place,
+                        // or because it refers to some block in the code,
+                        // etc. I'm not sure how best to serialize this.
+                        write!(f, "'_")?;
                     } else {
-                        let s = region.print_display_to_string(self);
-                        if s.is_empty() {
-                            // This happens when the value of the region
-                            // parameter is not easily serialized. This may be
-                            // because the user omitted it in the first place,
-                            // or because it refers to some block in the code,
-                            // etc. I'm not sure how best to serialize this.
-                            write!(f, "'_")?;
-                        } else {
-                            write!(f, "{}", s)?;
-                        }
+                        region.print_display(f, self)?;
                     }
                 }
                 UnpackedKind::Type(ty) => {
@@ -721,6 +716,32 @@ define_print! {
     }
 }
 
+// HACK(eddyb) (see `ty::RegionKind::display_outputs_anything`)
+//
+// NB: this must be kept in sync with the printing logic above.
+impl ty::BoundRegion {
+    fn display_outputs_anything(&self, cx: &mut PrintCx<'_, '_, '_>) -> bool {
+        if cx.is_verbose {
+            return true;
+        }
+
+        if let BrNamed(_, name) = *self {
+            if name != "" && name != "'_" {
+                return true;
+            }
+        }
+
+        let highlight = RegionHighlightMode::get();
+        if let Some((region, _)) = highlight.highlight_bound_region {
+            if *self == region {
+                return true;
+            }
+        }
+
+        false
+    }
+}
+
 define_print! {
     () ty::PlaceholderRegion, (self, f, cx) {
         display {
@@ -735,6 +756,24 @@ define_print! {
 
             write!(f, "{}", self.name)
         }
+    }
+}
+
+// HACK(eddyb) (see `ty::RegionKind::display_outputs_anything`)
+//
+// NB: this must be kept in sync with the printing logic above.
+impl ty::PlaceholderRegion {
+    fn display_outputs_anything(&self, cx: &mut PrintCx<'_, '_, '_>) -> bool {
+        if cx.is_verbose {
+            return true;
+        }
+
+        let highlight = RegionHighlightMode::get();
+        if highlight.placeholder_highlight(*self).is_some() {
+            return true;
+        }
+
+        self.name.display_outputs_anything(cx)
     }
 }
 
@@ -845,6 +884,49 @@ define_print! {
     }
 }
 
+// HACK(eddyb) Trying to print a lifetime might not print anything, which
+// may need special handling in the caller (of `ty::RegionKind::print`).
+// To avoid printing to a temporary string, the `display_outputs_anything`
+// method can instead be used to determine this, ahead of time.
+//
+// NB: this must be kept in sync with the printing logic above.
+impl ty::RegionKind {
+    fn display_outputs_anything(&self, cx: &mut PrintCx<'_, '_, '_>) -> bool {
+        if cx.is_verbose {
+            return true;
+        }
+
+        if RegionHighlightMode::get().region_highlighted(self).is_some() {
+            return true;
+        }
+
+        match *self {
+            ty::ReEarlyBound(ref data) => {
+                data.name != "" && data.name != "'_"
+            }
+
+            ty::ReLateBound(_, br) |
+            ty::ReFree(ty::FreeRegion { bound_region: br, .. }) => {
+                br.display_outputs_anything(cx)
+            }
+
+            ty::RePlaceholder(p) => p.display_outputs_anything(cx),
+
+            ty::ReScope(_) |
+            ty::ReVar(_) if cx.identify_regions => true,
+
+            ty::ReVar(region_vid) => region_vid.display_outputs_anything(cx),
+
+            ty::ReScope(_) |
+            ty::ReErased => false,
+
+            ty::ReStatic |
+            ty::ReEmpty |
+            ty::ReClosureBound(_) => true,
+        }
+    }
+}
+
 define_print! {
     () ty::FreeRegion, (self, f, cx) {
         debug {
@@ -928,6 +1010,24 @@ define_print! {
 
             write!(f, "'_#{}r", self.index())
         }
+    }
+}
+
+// HACK(eddyb) (see `ty::RegionKind::display_outputs_anything`)
+//
+// NB: this must be kept in sync with the printing logic above.
+impl ty::RegionVid {
+    fn display_outputs_anything(&self, cx: &mut PrintCx<'_, '_, '_>) -> bool {
+        if cx.is_verbose {
+            return true;
+        }
+
+        let highlight = RegionHighlightMode::get();
+        if highlight.region_highlighted(&ty::ReVar(*self)).is_some() {
+            return true;
+        }
+
+        false
     }
 }
 
@@ -1041,9 +1141,8 @@ define_print! {
                 }
                 Ref(r, ty, mutbl) => {
                     write!(f, "&")?;
-                    let s = r.print_display_to_string(cx);
-                    if !s.is_empty() {
-                        write!(f, "{} ", s)?;
+                    if r.display_outputs_anything(cx) {
+                        print!(f, cx, print_display(r), write(" "))?;
                     }
                     ty::TypeAndMut { ty, mutbl }.print(f, cx)
                 }
@@ -1089,17 +1188,16 @@ define_print! {
                 }
                 Adt(def, substs) => cx.parameterized(f, def.did, substs, iter::empty()),
                 Dynamic(data, r) => {
-                    let r = r.print_display_to_string(cx);
-                    if !r.is_empty() {
+                    let print_r = r.display_outputs_anything(cx);
+                    if print_r {
                         write!(f, "(")?;
                     }
                     write!(f, "dyn ")?;
                     data.print(f, cx)?;
-                    if !r.is_empty() {
-                        write!(f, " + {})", r)
-                    } else {
-                        Ok(())
+                    if print_r {
+                        print!(f, cx, write(" + "), print_display(r), write(")"))?;
                     }
+                    Ok(())
                 }
                 Foreign(def_id) => cx.parameterized(f, def_id, Substs::empty(), iter::empty()),
                 Projection(ref data) => data.print(f, cx),
