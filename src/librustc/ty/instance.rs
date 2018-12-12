@@ -1,4 +1,5 @@
 use hir::Unsafety;
+use hir::def::Namespace;
 use hir::def_id::DefId;
 use ty::{self, Ty, PolyFnSig, TypeFoldable, Substs, TyCtxt};
 use traits;
@@ -174,7 +175,7 @@ impl<'tcx> InstanceDef<'tcx> {
 
 impl<'tcx> fmt::Display for Instance<'tcx> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        ppaux::parameterized(f, self.def_id(), self.substs)?;
+        ppaux::parameterized(f, self.def_id(), self.substs, Namespace::ValueNS)?;
         match self.def {
             InstanceDef::Item(_) => Ok(()),
             InstanceDef::VtableShim(_) => {
