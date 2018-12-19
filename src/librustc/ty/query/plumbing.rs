@@ -8,11 +8,10 @@ use errors::Level;
 use errors::Diagnostic;
 use errors::FatalError;
 use ty::tls;
-use ty::{TyCtxt};
+use ty::{self, TyCtxt};
 use ty::query::Query;
 use ty::query::config::{QueryConfig, QueryDescription};
 use ty::query::job::{QueryJob, QueryResult, QueryInfo};
-use ty::item_path;
 
 use util::common::{profq_msg, ProfileQueriesMsg, QueryMsg};
 
@@ -282,7 +281,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         // sometimes cycles itself, leading to extra cycle errors.
         // (And cycle errors around impls tend to occur during the
         // collect/coherence phases anyhow.)
-        item_path::with_forced_impl_filename_line(|| {
+        ty::print::with_forced_impl_filename_line(|| {
             let span = fix_span(stack[1 % stack.len()].span, &stack[0].query);
             let mut err = struct_span_err!(self.sess,
                                            span,
