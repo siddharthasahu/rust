@@ -6,7 +6,7 @@ use hir::map::DefPathData;
 use hir::{self, Node};
 use ich::NodeIdHashingMode;
 use traits::{self, ObligationCause};
-use ty::{self, Ty, TyCtxt, GenericParamDefKind, TypeFoldable};
+use ty::{self, DefIdTree, Ty, TyCtxt, GenericParamDefKind, TypeFoldable};
 use ty::subst::{Subst, Substs, UnpackedKind};
 use ty::query::TyCtxtAt;
 use ty::TyKind::*;
@@ -551,7 +551,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
     pub fn closure_base_def_id(self, def_id: DefId) -> DefId {
         let mut def_id = def_id;
         while self.is_closure(def_id) {
-            def_id = self.parent_def_id(def_id).unwrap_or_else(|| {
+            def_id = self.parent(def_id).unwrap_or_else(|| {
                 bug!("closure {:?} has no parent", def_id);
             });
         }

@@ -12,7 +12,7 @@ use rustc::mir::{ClearCrossCrate, Local, Location, Mir, Mutability, Operand, Pla
 use rustc::mir::{Field, Projection, ProjectionElem, Rvalue, Statement, StatementKind};
 use rustc::mir::{Terminator, TerminatorKind};
 use rustc::ty::query::Providers;
-use rustc::ty::{self, TyCtxt};
+use rustc::ty::{self, DefIdTree, TyCtxt};
 
 use rustc_errors::{Applicability, Diagnostic, DiagnosticBuilder, Level};
 use rustc_data_structures::bit_set::BitSet;
@@ -345,7 +345,7 @@ fn do_mir_borrowck<'a, 'gcx, 'tcx>(
                 }
 
                 if tcx.is_closure(curr_def_id) {
-                    curr_def_id = tcx.parent_def_id(curr_def_id)
+                    curr_def_id = tcx.parent(curr_def_id)
                         .expect("a closure must have a parent_def_id");
                 } else {
                     break SignalledError::NoErrorsSeen;
