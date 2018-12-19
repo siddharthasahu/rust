@@ -18,7 +18,7 @@ use rustc::middle::lang_items;
 use rustc::middle::stability;
 use rustc::mir::interpret::GlobalId;
 use rustc::hir::{self, GenericArg, HirVec};
-use rustc::hir::def::{self, Def, CtorKind};
+use rustc::hir::def::{self, Def, CtorKind, Namespace};
 use rustc::hir::def_id::{CrateNum, DefId, CRATE_DEF_INDEX, LOCAL_CRATE};
 use rustc::ty::subst::Substs;
 use rustc::ty::{self, TyCtxt, Region, RegionVid, Ty, AdtKind};
@@ -4069,7 +4069,8 @@ where F: Fn(DefId) -> Def {
         }
     }
 
-    let names = PrintCx::new(tcx, AbsolutePathPrinter).print_item_path(def_id);
+    let names = PrintCx::new(tcx, AbsolutePathPrinter)
+        .print_item_path(def_id, None, Namespace::TypeNS);
 
     hir::Path {
         span: DUMMY_SP,
