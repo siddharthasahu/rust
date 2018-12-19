@@ -10,10 +10,10 @@ use ty::{Param, Bound, RawPtr, Ref, Never, Tuple};
 use ty::{Closure, Generator, GeneratorWitness, Foreign, Projection, Opaque};
 use ty::{Placeholder, UnnormalizedProjection, Dynamic, Int, Uint, Infer};
 use ty::{self, Ty, TypeFoldable};
-use ty::print::{FmtPrinter, PrintCx, Print};
+use ty::print::{FmtPrinter, PrettyPrinter, PrintCx, Print};
 
 use std::cell::Cell;
-use std::fmt;
+use std::fmt::{self, Write as _};
 use std::iter;
 use std::usize;
 
@@ -193,18 +193,18 @@ macro_rules! gen_display_debug {
 }
 macro_rules! gen_print_impl {
     ( ($($x:tt)+) $target:ty, ($self:ident, $cx:ident) $disp:block $dbg:block ) => {
-        impl<$($x)+, F: fmt::Write> Print<'tcx, FmtPrinter<F>> for $target {
+        impl<$($x)+, P: PrettyPrinter> Print<'tcx, P> for $target {
             type Output = fmt::Result;
-            fn print(&$self, $cx: &mut PrintCx<'_, '_, 'tcx, FmtPrinter<F>>) -> fmt::Result {
+            fn print(&$self, $cx: &mut PrintCx<'_, '_, 'tcx, P>) -> fmt::Result {
                 if $cx.is_debug $dbg
                 else $disp
             }
         }
     };
     ( () $target:ty, ($self:ident, $cx:ident) $disp:block $dbg:block ) => {
-        impl<F: fmt::Write> Print<'tcx, FmtPrinter<F>> for $target {
+        impl<P: PrettyPrinter> Print<'tcx, P> for $target {
             type Output = fmt::Result;
-            fn print(&$self, $cx: &mut PrintCx<'_, '_, 'tcx, FmtPrinter<F>>) -> fmt::Result {
+            fn print(&$self, $cx: &mut PrintCx<'_, '_, 'tcx, P>) -> fmt::Result {
                 if $cx.is_debug $dbg
                 else $disp
             }
@@ -235,7 +235,7 @@ macro_rules! define_print {
     ( $generic:tt $target:ty,
       ($self:ident, $cx:ident) { display $disp:block } ) => {
         gen_print_impl! { $generic $target, ($self, $cx) yes $disp no {
-            write!($cx.printer.fmt, "{:?}", $self)
+            write!($cx.printer, "{:?}", $self)
         } }
     };
 }
@@ -246,7 +246,7 @@ macro_rules! define_print_multi {
 }
 macro_rules! print_inner {
     ( $cx:expr, write ($($data:expr),+) ) => {
-        write!($cx.printer.fmt, $($data),+)
+        write!($cx.printer, $($data),+)
     };
     ( $cx:expr, $kind:ident ($data:expr) ) => {
         $data.$kind($cx)
@@ -258,7 +258,7 @@ macro_rules! print {
     };
 }
 
-impl<F: fmt::Write> PrintCx<'a, 'gcx, 'tcx, FmtPrinter<F>> {
+impl<P: PrettyPrinter> PrintCx<'a, 'gcx, 'tcx, P> {
     fn fn_sig(
         &mut self,
         inputs: &[Ty<'tcx>],
@@ -404,7 +404,7 @@ impl<F: fmt::Write> PrintCx<'a, 'gcx, 'tcx, FmtPrinter<F>> {
     }
 
     fn in_binder<T>(&mut self, value: &ty::Binder<T>) -> fmt::Result
-        where T: Print<'tcx, FmtPrinter<F>, Output = fmt::Result> + TypeFoldable<'tcx>
+        where T: Print<'tcx, P, Output = fmt::Result> + TypeFoldable<'tcx>
     {
         fn name_by_region_index(index: usize) -> InternedString {
             match index {
@@ -489,13 +489,6 @@ pub fn parameterized<F: fmt::Write>(
     })
 }
 
-impl<'a, 'tcx, P, T: Print<'tcx, P>> Print<'tcx, P> for &'a T {
-    type Output = T::Output;
-    fn print(&self, cx: &mut PrintCx<'_, '_, 'tcx, P>) -> Self::Output {
-        (*self).print(cx)
-    }
-}
-
 define_print! {
     ('tcx) &'tcx ty::List<ty::ExistentialPredicate<'tcx>>, (self, cx) {
         display {
@@ -575,7 +568,7 @@ impl fmt::Debug for ty::GenericParamDef {
 
 impl fmt::Debug for ty::TraitDef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        PrintCx::with(FmtPrinter { fmt: f }, |cx| {
+        PrintCx::with(FmtPrinter { fmt: f }, |mut cx| {
             print!(cx, write("{}", cx.tcx.def_path_str(self.def_id)))
         })
     }
@@ -583,7 +576,7 @@ impl fmt::Debug for ty::TraitDef {
 
 impl fmt::Debug for ty::AdtDef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        PrintCx::with(FmtPrinter { fmt: f }, |cx| {
+        PrintCx::with(FmtPrinter { fmt: f }, |mut cx| {
             print!(cx, write("{}", cx.tcx.def_path_str(self.did)))
         })
     }
@@ -599,7 +592,7 @@ impl<'tcx> fmt::Debug for ty::ClosureUpvar<'tcx> {
 
 impl fmt::Debug for ty::UpvarId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        PrintCx::with(FmtPrinter { fmt: f }, |cx| {
+        PrintCx::with(FmtPrinter { fmt: f }, |mut cx| {
             print!(cx, write("UpvarId({:?};`{}`;{:?})",
                 self.var_path.hir_id,
                 cx.tcx.hir().name(cx.tcx.hir().hir_to_node_id(self.var_path.hir_id)),
@@ -922,7 +915,7 @@ define_print! {
 define_print! {
     () ty::Variance, (self, cx) {
         debug {
-            cx.printer.fmt.write_str(match *self {
+            cx.printer.write_str(match *self {
                 ty::Covariant => "+",
                 ty::Contravariant => "-",
                 ty::Invariant => "o",
