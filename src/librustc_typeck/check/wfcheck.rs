@@ -67,7 +67,7 @@ pub fn check_item_well_formed<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, def_id: Def
 
     debug!("check_item_well_formed(it.id={}, it.name={})",
            item.id,
-           tcx.item_path_str(def_id));
+           tcx.def_path_str(def_id));
 
     match item.node {
         // Right now we check that every default trait implementation
@@ -932,7 +932,7 @@ fn report_bivariance<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
     if let Some(def_id) = suggested_marker_id {
         err.help(&format!("consider removing `{}` or using a marker such as `{}`",
                           param_name,
-                          tcx.item_path_str(def_id)));
+                          tcx.def_path_str(def_id)));
     }
     err.emit();
 }

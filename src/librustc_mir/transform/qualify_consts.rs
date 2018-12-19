@@ -891,7 +891,7 @@ impl<'a, 'tcx> Visitor<'tcx> for Qualifier<'a, 'tcx, 'tcx> {
                                     } else {
                                         let mut err = self.tcx.sess.struct_span_err(self.span,
                                             &format!("`{}` is not yet stable as a const fn",
-                                                    self.tcx.item_path_str(def_id)));
+                                                    self.tcx.def_path_str(def_id)));
                                         if nightly_options::is_nightly_build() {
                                             help!(&mut err,
                                                   "add `#![feature({})]` to the \

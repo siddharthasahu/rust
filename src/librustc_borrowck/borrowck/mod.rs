@@ -1407,7 +1407,7 @@ impl<'a, 'tcx> BorrowckCtxt<'a, 'tcx> {
                 out.push('(');
                 self.append_loan_path_to_string(&lp_base, out);
                 out.push_str(DOWNCAST_PRINTED_OPERATOR);
-                out.push_str(&self.tcx.item_path_str(variant_def_id));
+                out.push_str(&self.tcx.def_path_str(variant_def_id));
                 out.push(')');
             }
 
@@ -1444,7 +1444,7 @@ impl<'a, 'tcx> BorrowckCtxt<'a, 'tcx> {
                 out.push('(');
                 self.append_autoderefd_loan_path_to_string(&lp_base, out);
                 out.push_str(DOWNCAST_PRINTED_OPERATOR);
-                out.push_str(&self.tcx.item_path_str(variant_def_id));
+                out.push_str(&self.tcx.def_path_str(variant_def_id));
                 out.push(')');
             }
 
@@ -1524,7 +1524,7 @@ impl<'tcx> fmt::Debug for LoanPath<'tcx> {
 
             LpDowncast(ref lp, variant_def_id) => {
                 let variant_str = if variant_def_id.is_local() {
-                    ty::tls::with(|tcx| tcx.item_path_str(variant_def_id))
+                    ty::tls::with(|tcx| tcx.def_path_str(variant_def_id))
                 } else {
                     format!("{:?}", variant_def_id)
                 };
@@ -1559,7 +1559,7 @@ impl<'tcx> fmt::Display for LoanPath<'tcx> {
 
             LpDowncast(ref lp, variant_def_id) => {
                 let variant_str = if variant_def_id.is_local() {
-                    ty::tls::with(|tcx| tcx.item_path_str(variant_def_id))
+                    ty::tls::with(|tcx| tcx.def_path_str(variant_def_id))
                 } else {
                     format!("{:?}", variant_def_id)
                 };

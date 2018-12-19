@@ -4070,7 +4070,7 @@ where F: Fn(DefId) -> Def {
     }
 
     let names = PrintCx::new(tcx, AbsolutePathPrinter)
-        .print_item_path(def_id, None, Namespace::TypeNS);
+        .print_def_path(def_id, None, Namespace::TypeNS);
 
     hir::Path {
         span: DUMMY_SP,

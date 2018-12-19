@@ -2043,7 +2043,7 @@ impl<'tcx> Debug for Place<'tcx> {
             Static(box self::Static { def_id, ty }) => write!(
                 fmt,
                 "({}: {:?})",
-                ty::tls::with(|tcx| tcx.item_path_str(def_id)),
+                ty::tls::with(|tcx| tcx.def_path_str(def_id)),
                 ty
             ),
             Promoted(ref promoted) => write!(fmt, "({:?}: {:?})", promoted.0, promoted.1),
@@ -2701,7 +2701,7 @@ pub fn fmt_const_val(f: &mut impl Write, const_val: ty::Const<'_>) -> fmt::Resul
     }
     // print function definitions
     if let FnDef(did, _) = ty.sty {
-        return write!(f, "{}", item_path_str(did));
+        return write!(f, "{}", def_path_str(did));
     }
     // print string literals
     if let ConstValue::Slice(ptr, len) = value {
@@ -2726,8 +2726,8 @@ pub fn fmt_const_val(f: &mut impl Write, const_val: ty::Const<'_>) -> fmt::Resul
     write!(f, "{:?}:{}", value, ty)
 }
 
-fn item_path_str(def_id: DefId) -> String {
-    ty::tls::with(|tcx| tcx.item_path_str(def_id))
+fn def_path_str(def_id: DefId) -> String {
+    ty::tls::with(|tcx| tcx.def_path_str(def_id))
 }
 
 impl<'tcx> graph::DirectedGraph for Mir<'tcx> {

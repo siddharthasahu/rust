@@ -1342,7 +1342,7 @@ pub fn check_item_type<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, it: &'tcx hir::Ite
     debug!(
         "check_item_type(it.id={}, it.name={})",
         it.id,
-        tcx.item_path_str(tcx.hir().local_def_id(it.id))
+        tcx.def_path_str(tcx.hir().local_def_id(it.id))
     );
     let _indenter = indenter();
     match it.node {
@@ -3541,7 +3541,7 @@ impl<'a, 'gcx, 'tcx> FnCtxt<'a, 'gcx, 'tcx> {
         autoderef.unambiguous_final_ty(self);
 
         if let Some((did, field_ty)) = private_candidate {
-            let struct_path = self.tcx().item_path_str(did);
+            let struct_path = self.tcx().def_path_str(did);
             let mut err = struct_span_err!(self.tcx().sess, expr.span, E0616,
                                            "field `{}` of struct `{}` is private",
                                            field, struct_path);
