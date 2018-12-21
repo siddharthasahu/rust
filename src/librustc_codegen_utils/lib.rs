@@ -10,6 +10,7 @@
 #![feature(box_patterns)]
 #![feature(box_syntax)]
 #![feature(custom_attribute)]
+#![feature(in_band_lifetimes)]
 #![feature(nll)]
 #![allow(unused_attributes)]
 #![feature(rustc_diagnostic_macros)]
