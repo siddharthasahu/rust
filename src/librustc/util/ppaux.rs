@@ -1000,7 +1000,7 @@ define_print! {
             Ok(())
         }
         debug {
-            let _ = cx.path_qualified(self.self_ty(), Some(*self))?;
+            let _ = cx.path_qualified(self.self_ty(), Some(*self), Namespace::TypeNS)?;
             Ok(())
         }
     }
