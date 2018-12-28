@@ -489,7 +489,7 @@ impl<'b, 'tcx> HirPrinterSupport<'tcx> for TypedAnnotation<'b, 'tcx> {
     }
 
     fn node_path(&self, id: ast::NodeId) -> Option<String> {
-        Some(self.tcx.node_path_str(id))
+        Some(self.tcx.def_path_str(self.tcx.hir().local_def_id(id)))
     }
 }
 

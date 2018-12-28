@@ -216,12 +216,6 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
             .print_def_path(def_id, None, ns, iter::empty());
         s
     }
-
-    /// Returns a string identifying this local node-id.
-    // FIXME(eddyb) remove in favor of calling `def_path_str` directly.
-    pub fn node_path_str(self, id: ast::NodeId) -> String {
-        self.def_path_str(self.hir().local_def_id(id))
-    }
 }
 
 impl<P: Printer> PrintCx<'a, 'gcx, 'tcx, P> {
