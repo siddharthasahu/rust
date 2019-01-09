@@ -4050,10 +4050,15 @@ where F: Fn(DefId) -> Def {
     struct AbsolutePathPrinter;
 
     impl Printer for AbsolutePathPrinter {
+        type Error = !;
+
         type Path = Vec<String>;
 
-        fn path_crate(self: &mut PrintCx<'_, '_, '_, Self>, cnum: CrateNum) -> Self::Path {
-            vec![self.tcx.original_crate_name(cnum).to_string()]
+        fn path_crate(
+            self: &mut PrintCx<'_, '_, '_, Self>,
+            cnum: CrateNum,
+        ) -> Result<Self::Path, Self::Error> {
+            Ok(vec![self.tcx.original_crate_name(cnum).to_string()])
         }
         fn path_qualified(
             self: &mut PrintCx<'_, '_, 'tcx, Self>,
@@ -4061,7 +4066,7 @@ where F: Fn(DefId) -> Def {
             self_ty: Ty<'tcx>,
             trait_ref: Option<ty::TraitRef<'tcx>>,
             _ns: Namespace,
-        ) -> Self::Path {
+        ) -> Result<Self::Path, Self::Error> {
             let mut path = impl_prefix.unwrap_or(vec![]);
 
             // This shouldn't ever be needed, but just in case:
@@ -4071,15 +4076,15 @@ where F: Fn(DefId) -> Def {
                 path.push(format!("<{}>", self_ty));
             }
 
-            path
+            Ok(path)
         }
         fn path_append(
             self: &mut PrintCx<'_, '_, '_, Self>,
             mut path: Self::Path,
             text: &str,
-        ) -> Self::Path {
+        ) -> Result<Self::Path, Self::Error> {
             path.push(text.to_string());
-            path
+            Ok(path)
         }
         fn path_generic_args(
             self: &mut PrintCx<'_, '_, 'tcx, Self>,
@@ -4088,13 +4093,14 @@ where F: Fn(DefId) -> Def {
             _substs: &'tcx Substs<'tcx>,
             _ns: Namespace,
             _projections: impl Iterator<Item = ty::ExistentialProjection<'tcx>>,
-        ) -> Self::Path {
-            path
+        ) -> Result<Self::Path, Self::Error> {
+            Ok(path)
         }
     }
 
     let names = PrintCx::new(tcx, AbsolutePathPrinter)
-        .print_def_path(def_id, None, Namespace::TypeNS, iter::empty());
+        .print_def_path(def_id, None, Namespace::TypeNS, iter::empty())
+        .unwrap();
 
     hir::Path {
         span: DUMMY_SP,
