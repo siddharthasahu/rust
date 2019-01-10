@@ -223,9 +223,10 @@ fn get_symbol_hash<'a, 'tcx>(
 }
 
 fn def_symbol_name<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, def_id: DefId) -> ty::SymbolName {
-    let mut cx = PrintCx::new(tcx, SymbolPath::new());
-    let _ = cx.print_def_path(def_id, None, Namespace::ValueNS, iter::empty());
-    cx.printer.into_interned()
+    PrintCx::with(tcx, SymbolPath::new(), |mut cx| {
+        let _ = cx.print_def_path(def_id, None, Namespace::ValueNS, iter::empty());
+        cx.printer.into_interned()
+    })
 }
 
 fn symbol_name<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, instance: Instance<'tcx>) -> ty::SymbolName {
