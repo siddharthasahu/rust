@@ -254,6 +254,7 @@ pub trait Printer: Sized {
 
     type Path;
     type Region;
+    type Type;
 
     fn print_def_path(
         self: PrintCx<'_, '_, 'tcx, Self>,
@@ -279,6 +280,11 @@ pub trait Printer: Sized {
         self: PrintCx<'_, '_, '_, Self>,
         region: ty::Region<'_>,
     ) -> Result<Self::Region, Self::Error>;
+
+    fn print_type(
+        self: PrintCx<'_, '_, 'tcx, Self>,
+        ty: Ty<'tcx>,
+    ) -> Result<Self::Type, Self::Error>;
 
     fn path_crate(
         self: PrintCx<'_, '_, '_, Self>,
@@ -319,7 +325,15 @@ pub trait Printer: Sized {
 }
 
 /// Trait for printers that pretty-print using `fmt::Write` to the printer.
-pub trait PrettyPrinter: Printer<Error = fmt::Error, Path = Self, Region = Self> + fmt::Write {
+pub trait PrettyPrinter:
+    Printer<
+        Error = fmt::Error,
+        Path = Self,
+        Region = Self,
+        Type = Self,
+    > +
+    fmt::Write
+{
     /// Enter a nested print context, for pretty-printing
     /// nested components in some larger context.
     fn nest<'a, 'gcx, 'tcx, E>(
@@ -900,6 +914,7 @@ impl<F: fmt::Write> Printer for FmtPrinter<F> {
 
     type Path = Self;
     type Region = Self;
+    type Type = Self;
 
     fn print_def_path(
         mut self: PrintCx<'_, '_, 'tcx, Self>,
@@ -1028,6 +1043,13 @@ impl<F: fmt::Write> Printer for FmtPrinter<F> {
         }
 
         Ok(self.printer)
+    }
+
+    fn print_type(
+        self: PrintCx<'_, '_, 'tcx, Self>,
+        ty: Ty<'tcx>,
+    ) -> Result<Self::Type, Self::Error> {
+        self.pretty_print_type(ty)
     }
 
     fn path_crate(
