@@ -1,3 +1,4 @@
+use hir::def::Namespace;
 use hir::def_id::DefId;
 use infer::error_reporting::nice_region_error::NiceRegionError;
 use infer::lexical_region_resolve::RegionResolutionError;
@@ -245,7 +246,7 @@ impl NiceRegionError<'me, 'gcx, 'tcx> {
 
         {
             let mut note = String::new();
-            let mut printer = ty::print::FmtPrinter::new(&mut note);
+            let mut printer = ty::print::FmtPrinter::new(&mut note, Namespace::TypeNS);
             printer.region_highlight_mode.maybe_highlighting_region(sub_placeholder, has_sub);
             printer.region_highlight_mode.maybe_highlighting_region(sup_placeholder, has_sup);
 
@@ -279,7 +280,7 @@ impl NiceRegionError<'me, 'gcx, 'tcx> {
 
         {
             let mut note = String::new();
-            let mut printer = ty::print::FmtPrinter::new(&mut note);
+            let mut printer = ty::print::FmtPrinter::new(&mut note, Namespace::TypeNS);
             printer.region_highlight_mode.maybe_highlighting_region(vid, has_vid);
 
             let _ = ty::print::PrintCx::with(self.tcx, printer, |mut cx| {

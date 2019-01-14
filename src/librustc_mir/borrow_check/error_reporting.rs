@@ -3,6 +3,7 @@ use borrow_check::nll::region_infer::{RegionName, RegionNameSource};
 use borrow_check::prefixes::IsPrefixOf;
 use borrow_check::WriteKind;
 use rustc::hir;
+use rustc::hir::def::Namespace;
 use rustc::hir::def_id::DefId;
 use rustc::middle::region::ScopeTree;
 use rustc::mir::{
@@ -2307,7 +2308,7 @@ impl<'cx, 'gcx, 'tcx> MirBorrowckCtxt<'cx, 'gcx, 'tcx> {
     /// name where required.
     fn get_name_for_ty(&self, ty: ty::Ty<'tcx>, counter: usize) -> String {
         let mut s = String::new();
-        let mut printer = ty::print::FmtPrinter::new(&mut s);
+        let mut printer = ty::print::FmtPrinter::new(&mut s, Namespace::TypeNS);
 
         // We need to add synthesized lifetimes where appropriate. We do
         // this by hooking into the pretty printer and telling it to label the
@@ -2332,7 +2333,7 @@ impl<'cx, 'gcx, 'tcx> MirBorrowckCtxt<'cx, 'gcx, 'tcx> {
     /// synthesized lifetime name where required.
     fn get_region_name_for_ty(&self, ty: ty::Ty<'tcx>, counter: usize) -> String {
         let mut s = String::new();
-        let mut printer = ty::print::FmtPrinter::new(&mut s);
+        let mut printer = ty::print::FmtPrinter::new(&mut s, Namespace::TypeNS);
 
         let region = match ty.sty {
             ty::TyKind::Ref(region, _, _) => {

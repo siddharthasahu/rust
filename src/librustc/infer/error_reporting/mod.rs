@@ -445,7 +445,6 @@ impl<'a, 'gcx, 'tcx> InferCtxt<'a, 'gcx, 'tcx> {
         terr: &TypeError<'tcx>,
         sp: Span,
     ) {
-        use hir::def::Namespace;
         use hir::def_id::CrateNum;
         use ty::print::{PrintCx, Printer};
         use ty::subst::Substs;
@@ -485,7 +484,6 @@ impl<'a, 'gcx, 'tcx> InferCtxt<'a, 'gcx, 'tcx> {
                 self: PrintCx<'_, '_, 'tcx, Self>,
                 _self_ty: Ty<'tcx>,
                 _trait_ref: Option<ty::TraitRef<'tcx>>,
-                _ns: Namespace,
             ) -> Result<Self::Path, Self::Error> {
                 Err(NonTrivialPath)
             }
@@ -518,7 +516,6 @@ impl<'a, 'gcx, 'tcx> InferCtxt<'a, 'gcx, 'tcx> {
                 ) -> Result<Self::Path, Self::Error>,
                 _params: &[ty::GenericParamDef],
                 _substs: &'tcx Substs<'tcx>,
-                _ns: Namespace,
                 _projections: impl Iterator<Item = ty::ExistentialProjection<'tcx>>,
             ) -> Result<Self::Path, Self::Error> {
                 print_prefix(self)
@@ -531,7 +528,7 @@ impl<'a, 'gcx, 'tcx> InferCtxt<'a, 'gcx, 'tcx> {
             if !(did1.is_local() || did2.is_local()) && did1.krate != did2.krate {
                 let abs_path = |def_id| {
                     PrintCx::with(self.tcx, AbsolutePathPrinter, |cx| {
-                        cx.print_def_path(def_id, None, Namespace::TypeNS, iter::empty())
+                        cx.print_def_path(def_id, None, iter::empty())
                     })
                 };
 
