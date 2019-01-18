@@ -154,7 +154,7 @@ pub mod ty;
 pub mod util {
     pub mod captures;
     pub mod common;
-    pub mod ppaux;
+    mod ppaux;
     pub mod nodemap;
     pub mod time_graph;
     pub mod profiling;

@@ -1,7 +1,6 @@
 use hir;
 use hir::def::Namespace;
-use hir::def_id::DefId;
-use ty::subst::{Kind, Substs, UnpackedKind};
+use ty::subst::{Kind, UnpackedKind};
 use ty::{self, Ty};
 use ty::print::{FmtPrinter, PrettyPrinter, PrintCx, Print, Printer};
 
@@ -139,19 +138,6 @@ macro_rules! define_scoped_cx {
             () => ($cx)
         }
     };
-}
-
-pub fn parameterized<F: fmt::Write>(
-    f: &mut F,
-    did: DefId,
-    substs: &Substs<'_>,
-    ns: Namespace,
-) -> fmt::Result {
-    PrintCx::with_tls_tcx(FmtPrinter::new(f, ns), |cx| {
-        let substs = cx.tcx.lift(&substs).expect("could not lift for printing");
-        cx.print_def_path(did, Some(substs), iter::empty())?;
-        Ok(())
-    })
 }
 
 define_print! {

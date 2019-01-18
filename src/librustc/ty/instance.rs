@@ -2,9 +2,9 @@ use hir::Unsafety;
 use hir::def::Namespace;
 use hir::def_id::DefId;
 use ty::{self, Ty, PolyFnSig, TypeFoldable, Substs, TyCtxt};
+use ty::print::{FmtPrinter, Printer, PrintCx};
 use traits;
 use rustc_target::spec::abi::Abi;
-use util::ppaux;
 
 use std::fmt;
 use std::iter;
@@ -175,7 +175,12 @@ impl<'tcx> InstanceDef<'tcx> {
 
 impl<'tcx> fmt::Display for Instance<'tcx> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        ppaux::parameterized(f, self.def_id(), self.substs, Namespace::ValueNS)?;
+        PrintCx::with_tls_tcx(FmtPrinter::new(&mut *f, Namespace::ValueNS), |cx| {
+            let substs = cx.tcx.lift(&self.substs).expect("could not lift for printing");
+            cx.print_def_path(self.def_id(), Some(substs), iter::empty())?;
+            Ok(())
+        })?;
+
         match self.def {
             InstanceDef::Item(_) => Ok(()),
             InstanceDef::VtableShim(_) => {
