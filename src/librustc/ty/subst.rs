@@ -10,6 +10,7 @@ use syntax_pos::{Span, DUMMY_SP};
 use smallvec::SmallVec;
 
 use core::intrinsics;
+use std::fmt;
 use std::cmp::Ordering;
 use std::marker::PhantomData;
 use std::mem;
@@ -56,6 +57,15 @@ impl<'tcx> UnpackedKind<'tcx> {
                 NonZeroUsize::new_unchecked(ptr | tag)
             },
             marker: PhantomData
+        }
+    }
+}
+
+impl fmt::Debug for Kind<'tcx> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.unpack() {
+            UnpackedKind::Lifetime(lt) => lt.fmt(f),
+            UnpackedKind::Type(ty) => ty.fmt(f),
         }
     }
 }
