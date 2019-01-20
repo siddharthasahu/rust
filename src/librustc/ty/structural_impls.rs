@@ -754,16 +754,6 @@ BraceStructLiftImpl! {
     }
 }
 
-// FIXME(eddyb) this is like what `CloneTypeFoldableAndLiftImpls!`
-// generates, except that macro *also* generates a foldable impl,
-// which we don't want (with it we'd risk bypassing `fold_region`).
-impl<'tcx> Lift<'tcx> for ty::RegionKind {
-    type Lifted = ty::RegionKind;
-    fn lift_to_tcx<'b, 'gcx>(&self, _: TyCtxt<'b, 'gcx, 'tcx>) -> Option<Self::Lifted> {
-        Some(self.clone())
-    }
-}
-
 BraceStructLiftImpl! {
     impl<'a, 'tcx> Lift<'tcx> for ty::Const<'a> {
         type Lifted = ty::Const<'tcx>;
