@@ -250,13 +250,14 @@ impl NiceRegionError<'me, 'gcx, 'tcx> {
             printer.region_highlight_mode.maybe_highlighting_region(sub_placeholder, has_sub);
             printer.region_highlight_mode.maybe_highlighting_region(sup_placeholder, has_sup);
 
-            let _ = ty::print::PrintCx::with(self.tcx, printer, |mut cx| {
-                write!(cx.printer, "`")?;
+            let _ = (|| {
+                let mut cx = ty::print::PrintCx::new(self.tcx, printer);
+                write!(cx, "`")?;
                 cx = cx.nest(|cx| expected_trait_ref.self_ty().print(cx))?;
-                write!(cx.printer, "` must implement `")?;
+                write!(cx, "` must implement `")?;
                 cx = cx.nest(|cx| expected_trait_ref.print(cx))?;
-                write!(cx.printer, "`")
-            });
+                write!(cx, "`")
+            })();
 
             match (has_sub, has_sup) {
                 (Some(n1), Some(n2)) => {
@@ -283,13 +284,14 @@ impl NiceRegionError<'me, 'gcx, 'tcx> {
             let mut printer = ty::print::FmtPrinter::new(&mut note, Namespace::TypeNS);
             printer.region_highlight_mode.maybe_highlighting_region(vid, has_vid);
 
-            let _ = ty::print::PrintCx::with(self.tcx, printer, |mut cx| {
-                write!(cx.printer, "but `")?;
+            let _ = (|| {
+                let mut cx = ty::print::PrintCx::new(self.tcx, printer);
+                write!(cx, "but `")?;
                 cx = cx.nest(|cx| actual_trait_ref.self_ty().print(cx))?;
-                write!(cx.printer, "` only implements `")?;
+                write!(cx, "` only implements `")?;
                 cx = cx.nest(|cx| actual_trait_ref.print(cx))?;
-                write!(cx.printer, "`")
-            });
+                write!(cx, "`")
+            })();
 
             if let Some(n) = has_vid {
                 let _ = write!(note,

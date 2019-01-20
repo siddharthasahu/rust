@@ -15,6 +15,7 @@ use syntax::symbol::InternedString;
 use std::cell::Cell;
 use std::fmt::{self, Write as _};
 use std::iter;
+use std::ops::{Deref, DerefMut};
 
 // `pretty` is a separate module only for organization.
 use super::*;
@@ -26,7 +27,7 @@ macro_rules! nest {
 }
 macro_rules! print_inner {
     (write ($($data:expr),+)) => {
-        write!(scoped_cx!().printer, $($data),+)?
+        write!(scoped_cx!(), $($data),+)?
     };
     ($kind:ident ($data:expr)) => {
         nest!(|cx| $data.$kind(cx))
@@ -186,16 +187,7 @@ pub trait PrettyPrinter:
         self: PrintCx<'a, 'gcx, 'tcx, Self>,
         f: impl FnOnce(PrintCx<'_, 'gcx, 'tcx, Self>) -> Result<Self, E>,
     ) -> Result<PrintCx<'a, 'gcx, 'tcx, Self>, E> {
-        let printer = f(PrintCx {
-            tcx: self.tcx,
-            printer: self.printer,
-            config: self.config,
-        })?;
-        Ok(PrintCx {
-            tcx: self.tcx,
-            printer,
-            config: self.config,
-        })
+        Ok(PrintCx::new(self.tcx, f(self)?))
     }
 
     /// Like `print_def_path` but for value paths.
@@ -244,6 +236,12 @@ pub trait PrettyPrinter:
     ) -> bool;
 }
 
+impl<P: PrettyPrinter> fmt::Write for PrintCx<'_, '_, '_, P> {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        (**self).write_str(s)
+    }
+}
+
 impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
     // HACK(eddyb) get rid of `def_path_str` and/or pass `Namespace` explicitly always
     // (but also some things just print a `DefId` generally so maybe we need this?)
@@ -268,28 +266,9 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         let ns = self.guess_def_namespace(def_id);
         debug!("def_path_str: def_id={:?}, ns={:?}", def_id, ns);
         let mut s = String::new();
-        let _ = PrintCx::with(self, FmtPrinter::new(&mut s, ns), |cx| {
-            cx.print_def_path(def_id, None, iter::empty())
-        });
+        let _ = PrintCx::new(self, FmtPrinter::new(&mut s, ns))
+            .print_def_path(def_id, None, iter::empty());
         s
-    }
-}
-
-pub struct FmtPrinter<F: fmt::Write> {
-    fmt: F,
-    empty: bool,
-    in_value: bool,
-    pub region_highlight_mode: RegionHighlightMode,
-}
-
-impl<F: fmt::Write> FmtPrinter<F> {
-    pub fn new(fmt: F, ns: Namespace) -> Self {
-        FmtPrinter {
-            fmt,
-            empty: true,
-            in_value: ns == Namespace::ValueNS,
-            region_highlight_mode: RegionHighlightMode::default(),
-        }
     }
 }
 
@@ -346,7 +325,7 @@ impl<'gcx, 'tcx, P: PrettyPrinter> PrintCx<'_, 'gcx, 'tcx, P> {
         }
 
         if def_id.is_local() {
-            return Ok((self.printer, false));
+            return self.ok().map(|path| (path, false));
         }
 
         let visible_parent_map = self.tcx.visible_parent_map(LOCAL_CRATE);
@@ -366,7 +345,7 @@ impl<'gcx, 'tcx, P: PrettyPrinter> PrintCx<'_, 'gcx, 'tcx, P> {
 
         let visible_parent = match visible_parent_map.get(&def_id).cloned() {
             Some(parent) => parent,
-            None => return Ok((self.printer, false)),
+            None => return self.ok().map(|path| (path, false)),
         };
         // HACK(eddyb) this uses `nest` to avoid knowing ahead of time whether
         // the entire path will succeed or not. To support printers that do not
@@ -374,12 +353,12 @@ impl<'gcx, 'tcx, P: PrettyPrinter> PrintCx<'_, 'gcx, 'tcx, P> {
         // need to be built, before starting to print anything.
         let mut prefix_success = false;
         nest!(|cx| {
-            let (printer, success) = cx.try_print_visible_def_path(visible_parent)?;
+            let (path, success) = cx.try_print_visible_def_path(visible_parent)?;
             prefix_success = success;
-            Ok(printer)
+            Ok(path)
         });
         if !prefix_success {
-            return Ok((self.printer, false));
+            return self.ok().map(|path| (path, false));
         };
         let actual_parent = self.tcx.parent(def_id);
         debug!(
@@ -448,7 +427,7 @@ impl<'gcx, 'tcx, P: PrettyPrinter> PrintCx<'_, 'gcx, 'tcx, P> {
             },
         };
         debug!("try_print_visible_def_path: symbol={:?}", symbol);
-        Ok((self.path_append(|cx| Ok(cx.printer), &symbol)?, true))
+        Ok((self.path_append(|cx| cx.ok(), &symbol)?, true))
     }
 
     pub fn pretty_path_qualified(
@@ -478,7 +457,7 @@ impl<'gcx, 'tcx, P: PrettyPrinter> PrintCx<'_, 'gcx, 'tcx, P> {
             if let Some(trait_ref) = trait_ref {
                 p!(write(" as "), print(trait_ref));
             }
-            Ok(cx.printer)
+            cx.ok()
         })
     }
 
@@ -501,7 +480,7 @@ impl<'gcx, 'tcx, P: PrettyPrinter> PrintCx<'_, 'gcx, 'tcx, P> {
             }
             p!(print(self_ty));
 
-            Ok(cx.printer)
+            cx.ok()
         })
     }
 
@@ -558,7 +537,7 @@ impl<'gcx, 'tcx, P: PrettyPrinter> PrintCx<'_, 'gcx, 'tcx, P> {
         let projection0 = projections.next();
 
         if arg0.is_none() && projection0.is_none() {
-            return Ok(self.printer);
+            return self.ok();
         }
 
         self.generic_delimiters(|mut cx| {
@@ -570,7 +549,7 @@ impl<'gcx, 'tcx, P: PrettyPrinter> PrintCx<'_, 'gcx, 'tcx, P> {
                     empty = false;
                     Ok(())
                 } else {
-                    write!(cx.printer, ", ")
+                    write!(cx, ", ")
                 }
             };
 
@@ -600,8 +579,51 @@ impl<'gcx, 'tcx, P: PrettyPrinter> PrintCx<'_, 'gcx, 'tcx, P> {
                    print(projection.ty));
             }
 
-            Ok(cx.printer)
+            cx.ok()
         })
+    }
+}
+
+// HACK(eddyb) boxed to avoid moving around a large struct by-value.
+pub struct FmtPrinter<F>(Box<FmtPrinterData<F>>);
+
+pub struct FmtPrinterData<F> {
+    fmt: F,
+
+    empty: bool,
+    in_value: bool,
+
+    used_region_names: FxHashSet<InternedString>,
+    region_index: usize,
+    binder_depth: usize,
+
+    pub region_highlight_mode: RegionHighlightMode,
+}
+
+impl<F> Deref for FmtPrinter<F> {
+    type Target = FmtPrinterData<F>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<F> DerefMut for FmtPrinter<F> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<F> FmtPrinter<F> {
+    pub fn new(fmt: F, ns: Namespace) -> Self {
+        FmtPrinter(Box::new(FmtPrinterData {
+            fmt,
+            empty: true,
+            in_value: ns == Namespace::ValueNS,
+            used_region_names: Default::default(),
+            region_index: 0,
+            binder_depth: 0,
+            region_highlight_mode: RegionHighlightMode::default(),
+        }))
     }
 }
 
@@ -631,17 +653,17 @@ impl<F: fmt::Write> Printer for FmtPrinter<F> {
         if generics.as_ref().and_then(|g| g.parent).is_none() {
             let mut visible_path_success = false;
             self = self.nest(|cx| {
-                let (printer, success) = cx.try_print_visible_def_path(def_id)?;
+                let (path, success) = cx.try_print_visible_def_path(def_id)?;
                 visible_path_success = success;
-                Ok(printer)
+                Ok(path)
             })?;
             if visible_path_success {
                 return if let (Some(generics), Some(substs)) = (generics, substs) {
                     let has_own_self = generics.has_self && generics.parent_count == 0;
                     let params = &generics.params[has_own_self as usize..];
-                    self.path_generic_args(|cx| Ok(cx.printer), params, substs, projections)
+                    self.path_generic_args(|cx| cx.ok(), params, substs, projections)
                 } else {
-                    Ok(self.printer)
+                    self.ok()
                 };
             }
         }
@@ -695,14 +717,13 @@ impl<F: fmt::Write> Printer for FmtPrinter<F> {
             if self.tcx.sess.rust_2018() {
                 // We add the `crate::` keyword on Rust 2018, only when desired.
                 if SHOULD_PREFIX_WITH_CRATE.with(|flag| flag.get()) {
-                    write!(self.printer, "{}", keywords::Crate.name())?;
+                    write!(self, "{}", keywords::Crate.name())?;
                 }
             }
-            Ok(self.printer)
         } else {
-            write!(self.printer, "{}", self.tcx.crate_name(cnum))?;
-            Ok(self.printer)
+            write!(self, "{}", self.tcx.crate_name(cnum))?;
         }
+        self.ok()
     }
     fn path_qualified(
         self: PrintCx<'_, '_, 'tcx, Self>,
@@ -721,15 +742,15 @@ impl<F: fmt::Write> Printer for FmtPrinter<F> {
         trait_ref: Option<ty::TraitRef<'tcx>>,
     ) -> Result<Self::Path, Self::Error> {
         self.pretty_path_append_impl(|cx| {
-            let mut printer = print_prefix(cx)?;
+            let mut path = print_prefix(cx)?;
 
             // HACK(eddyb) this accounts for `generic_delimiters`
             // printing `::<` instead of `<` if `in_value` is set.
-            if !printer.empty && !printer.in_value {
-                write!(printer, "::")?;
+            if !path.empty && !path.in_value {
+                write!(path, "::")?;
             }
 
-            Ok(printer)
+            Ok(path)
         }, self_ty, trait_ref)
     }
     fn path_append<'gcx, 'tcx>(
@@ -739,18 +760,18 @@ impl<F: fmt::Write> Printer for FmtPrinter<F> {
         ) -> Result<Self::Path, Self::Error>,
         text: &str,
     ) -> Result<Self::Path, Self::Error> {
-        let mut printer = print_prefix(self)?;
+        let mut path = print_prefix(self)?;
 
         // FIXME(eddyb) `text` should never be empty, but it
         // currently is for `extern { ... }` "foreign modules".
         if !text.is_empty() {
-            if !printer.empty {
-                write!(printer, "::")?;
+            if !path.empty {
+                write!(path, "::")?;
             }
-            write!(printer, "{}", text)?;
+            write!(path, "{}", text)?;
         }
 
-        Ok(printer)
+        Ok(path)
     }
     fn path_generic_args<'gcx, 'tcx>(
         self: PrintCx<'_, 'gcx, 'tcx, Self>,
@@ -770,18 +791,11 @@ impl<F: fmt::Write> PrettyPrinter for FmtPrinter<F> {
         mut self: PrintCx<'a, 'gcx, 'tcx, Self>,
         f: impl FnOnce(PrintCx<'_, 'gcx, 'tcx, Self>) -> Result<Self, E>,
     ) -> Result<PrintCx<'a, 'gcx, 'tcx, Self>, E> {
-        let was_empty = std::mem::replace(&mut self.printer.empty, true);
-        let mut printer = f(PrintCx {
-            tcx: self.tcx,
-            printer: self.printer,
-            config: self.config,
-        })?;
-        printer.empty &= was_empty;
-        Ok(PrintCx {
-            tcx: self.tcx,
-            printer,
-            config: self.config,
-        })
+        let tcx = self.tcx;
+        let was_empty = std::mem::replace(&mut self.empty, true);
+        let mut inner = f(self)?;
+        inner.empty &= was_empty;
+        Ok(PrintCx::new(tcx, inner))
     }
 
     fn print_value_path(
@@ -789,11 +803,11 @@ impl<F: fmt::Write> PrettyPrinter for FmtPrinter<F> {
         def_id: DefId,
         substs: Option<&'tcx Substs<'tcx>>,
     ) -> Result<Self::Path, Self::Error> {
-        let was_in_value = std::mem::replace(&mut self.printer.in_value, true);
-        let mut printer = self.print_def_path(def_id, substs, iter::empty())?;
-        printer.in_value = was_in_value;
+        let was_in_value = std::mem::replace(&mut self.in_value, true);
+        let mut path = self.print_def_path(def_id, substs, iter::empty())?;
+        path.in_value = was_in_value;
 
-        Ok(printer)
+        Ok(path)
     }
 
     fn in_binder<T>(
@@ -809,18 +823,18 @@ impl<F: fmt::Write> PrettyPrinter for FmtPrinter<F> {
         mut self: PrintCx<'_, 'gcx, 'tcx, Self>,
         f: impl FnOnce(PrintCx<'_, 'gcx, 'tcx, Self>) -> Result<Self, Self::Error>,
     ) -> Result<Self, Self::Error> {
-        if !self.printer.empty && self.printer.in_value {
-            write!(self.printer, "::<")?;
+        if !self.empty && self.in_value {
+            write!(self, "::<")?;
         } else {
-            write!(self.printer, "<")?;
+            write!(self, "<")?;
         }
 
-        let was_in_value = std::mem::replace(&mut self.printer.in_value, false);
-        let mut printer = f(self)?;
-        printer.in_value = was_in_value;
+        let was_in_value = std::mem::replace(&mut self.in_value, false);
+        let mut inner = f(self)?;
+        inner.in_value = was_in_value;
 
-        write!(printer, ">")?;
-        Ok(printer)
+        write!(inner, ">")?;
+        Ok(inner)
     }
 
     fn always_print_region_in_paths(
@@ -834,7 +848,7 @@ impl<F: fmt::Write> PrettyPrinter for FmtPrinter<F> {
         self: &PrintCx<'_, '_, '_, Self>,
         region: ty::Region<'_>,
     ) -> bool {
-        let highlight = self.printer.region_highlight_mode;
+        let highlight = self.region_highlight_mode;
         if highlight.region_highlighted(region).is_some() {
             return true;
         }
@@ -891,15 +905,15 @@ impl<F: fmt::Write> FmtPrinter<F> {
         define_scoped_cx!(self);
 
         // Watch out for region highlights.
-        let highlight = self.printer.region_highlight_mode;
+        let highlight = self.region_highlight_mode;
         if let Some(n) = highlight.region_highlighted(region) {
             p!(write("'{}", n));
-            return Ok(self.printer);
+            return self.ok();
         }
 
         if self.tcx.sess.verbose() {
             p!(write("{:?}", region));
-            return Ok(self.printer);
+            return self.ok();
         }
 
         let identify_regions = self.tcx.sess.opts.debugging_opts.identify_regions;
@@ -920,7 +934,7 @@ impl<F: fmt::Write> FmtPrinter<F> {
                 if let ty::BrNamed(_, name) = br {
                     if name != "" && name != "'_" {
                         p!(write("{}", name));
-                        return Ok(self.printer);
+                        return self.ok();
                     }
                 }
 
@@ -960,7 +974,7 @@ impl<F: fmt::Write> FmtPrinter<F> {
             ty::ReClosureBound(vid) => p!(write("{:?}", vid)),
         }
 
-        Ok(self.printer)
+        self.ok()
     }
 }
 
@@ -1058,7 +1072,7 @@ impl<'gcx, 'tcx, P: PrettyPrinter> PrintCx<'_, 'gcx, 'tcx, P> {
                 // FIXME(eddyb) print this with `print_def_path`.
                 if self.tcx.sess.verbose() {
                     p!(write("Opaque({:?}, {:?})", def_id, substs));
-                    return Ok(self.printer);
+                    return self.ok();
                 }
 
                 let def_key = self.tcx.def_key(def_id);
@@ -1074,7 +1088,7 @@ impl<'gcx, 'tcx, P: PrettyPrinter> PrintCx<'_, 'gcx, 'tcx, P> {
                         }
                         p!(write(">"));
                     }
-                    return Ok(self.printer);
+                    return self.ok();
                 }
                 // Grab the "TraitA + TraitB" from `impl TraitA + TraitB`,
                 // by looking up the projections associated with the def_id.
@@ -1205,7 +1219,7 @@ impl<'gcx, 'tcx, P: PrettyPrinter> PrintCx<'_, 'gcx, 'tcx, P> {
             }
         }
 
-        Ok(self.printer)
+        self.ok()
     }
 
     pub fn pretty_fn_sig(
@@ -1232,11 +1246,18 @@ impl<'gcx, 'tcx, P: PrettyPrinter> PrintCx<'_, 'gcx, 'tcx, P> {
             p!(write(" -> "), print(output));
         }
 
-        Ok(self.printer)
+        self.ok()
     }
+}
 
-    pub fn pretty_in_binder<T>(mut self, value: &ty::Binder<T>) -> Result<P, fmt::Error>
-        where T: Print<'tcx, P, Output = P, Error = fmt::Error> + TypeFoldable<'tcx>
+// HACK(eddyb) limited to `FmtPrinter` because of `binder_depth`,
+// `region_index` and `used_region_names`.
+impl<F: fmt::Write> FmtPrinter<F> {
+    pub fn pretty_in_binder<T>(
+        mut self: PrintCx<'_, '_, 'tcx, Self>,
+        value: &ty::Binder<T>,
+    ) -> Result<Self, fmt::Error>
+        where T: Print<'tcx, Self, Output = Self, Error = fmt::Error> + TypeFoldable<'tcx>
     {
         fn name_by_region_index(index: usize) -> InternedString {
             match index {
@@ -1251,13 +1272,13 @@ impl<'gcx, 'tcx, P: PrettyPrinter> PrintCx<'_, 'gcx, 'tcx, P> {
         // clearly differentiate between named and unnamed regions in
         // the output. We'll probably want to tweak this over time to
         // decide just how much information to give.
-        if self.config.binder_depth == 0 {
+        if self.binder_depth == 0 {
             self.prepare_late_bound_region_info(value);
         }
 
         let mut empty = true;
         let mut start_or_continue = |cx: &mut Self, start: &str, cont: &str| {
-            write!(cx.printer, "{}", if empty {
+            write!(cx, "{}", if empty {
                 empty = false;
                 start
             } else {
@@ -1267,13 +1288,13 @@ impl<'gcx, 'tcx, P: PrettyPrinter> PrintCx<'_, 'gcx, 'tcx, P> {
 
         define_scoped_cx!(self);
 
-        let old_region_index = self.config.region_index;
+        let old_region_index = self.region_index;
         let mut region_index = old_region_index;
         let new_value = self.tcx.replace_late_bound_regions(value, |br| {
             let _ = start_or_continue(&mut self, "for<", ", ");
             let br = match br {
                 ty::BrNamed(_, name) => {
-                    let _ = write!(self.printer, "{}", name);
+                    let _ = write!(self, "{}", name);
                     br
                 }
                 ty::BrAnon(_) |
@@ -1282,11 +1303,11 @@ impl<'gcx, 'tcx, P: PrettyPrinter> PrintCx<'_, 'gcx, 'tcx, P> {
                     let name = loop {
                         let name = name_by_region_index(region_index);
                         region_index += 1;
-                        if !self.is_name_used(&name) {
+                        if !self.used_region_names.contains(&name) {
                             break name;
                         }
                     };
-                    let _ = write!(self.printer, "{}", name);
+                    let _ = write!(self, "{}", name);
                     ty::BrNamed(DefId::local(CRATE_DEF_INDEX), name)
                 }
             };
@@ -1294,25 +1315,20 @@ impl<'gcx, 'tcx, P: PrettyPrinter> PrintCx<'_, 'gcx, 'tcx, P> {
         }).0;
         start_or_continue(&mut self, "", "> ")?;
 
-        // Push current state to gcx, and restore after writing new_value.
-        self.config.binder_depth += 1;
-        self.config.region_index = region_index;
-        let result = new_value.print(PrintCx {
-            tcx: self.tcx,
-            printer: self.printer,
-            config: self.config,
-        });
-        self.config.region_index = old_region_index;
-        self.config.binder_depth -= 1;
-        result
+        self.binder_depth += 1;
+        self.region_index = region_index;
+        let mut inner = new_value.print(self)?;
+        inner.region_index = old_region_index;
+        inner.binder_depth -= 1;
+        Ok(inner)
     }
 
     fn prepare_late_bound_region_info<T>(&mut self, value: &ty::Binder<T>)
-    where T: TypeFoldable<'tcx>
+        where T: TypeFoldable<'tcx>
     {
 
-        struct LateBoundRegionNameCollector(FxHashSet<InternedString>);
-        impl<'tcx> ty::fold::TypeVisitor<'tcx> for LateBoundRegionNameCollector {
+        struct LateBoundRegionNameCollector<'a>(&'a mut FxHashSet<InternedString>);
+        impl<'tcx> ty::fold::TypeVisitor<'tcx> for LateBoundRegionNameCollector<'_> {
             fn visit_region(&mut self, r: ty::Region<'tcx>) -> bool {
                 match *r {
                     ty::ReLateBound(_, ty::BrNamed(_, name)) => {
@@ -1324,17 +1340,10 @@ impl<'gcx, 'tcx, P: PrettyPrinter> PrintCx<'_, 'gcx, 'tcx, P> {
             }
         }
 
-        let mut collector = LateBoundRegionNameCollector(Default::default());
+        self.used_region_names.clear();
+        let mut collector = LateBoundRegionNameCollector(&mut self.used_region_names);
         value.visit_with(&mut collector);
-        self.config.used_region_names = Some(collector.0);
-        self.config.region_index = 0;
-    }
-
-    fn is_name_used(&self, name: &InternedString) -> bool {
-        match self.config.used_region_names {
-            Some(ref names) => names.contains(name),
-            None => false,
-        }
+        self.region_index = 0;
     }
 }
 
@@ -1366,10 +1375,10 @@ impl<T> LiftAndPrintToFmt<'tcx> for T
         tcx: TyCtxt<'_, '_, 'tcx>,
         f: &mut fmt::Formatter<'_>,
     ) -> fmt::Result {
-        PrintCx::with(tcx, FmtPrinter::new(f, Namespace::TypeNS), |cx| {
-            cx.tcx.lift(self).expect("could not lift for printing").print(cx)?;
-            Ok(())
-        })
+        tcx.lift(self)
+            .expect("could not lift for printing")
+            .print(PrintCx::new(tcx, FmtPrinter::new(f, Namespace::TypeNS)))?;
+        Ok(())
     }
 }
 
@@ -1380,10 +1389,8 @@ impl LiftAndPrintToFmt<'tcx> for ty::RegionKind {
         tcx: TyCtxt<'_, '_, 'tcx>,
         f: &mut fmt::Formatter<'_>,
     ) -> fmt::Result {
-        PrintCx::with(tcx, FmtPrinter::new(f, Namespace::TypeNS), |cx| {
-            self.print(cx)?;
-            Ok(())
-        })
+        self.print(PrintCx::new(tcx, FmtPrinter::new(f, Namespace::TypeNS)))?;
+        Ok(())
     }
 }
 
@@ -1416,7 +1423,7 @@ macro_rules! define_print_and_forward_display {
                 define_scoped_cx!($cx);
                 let _: () = $print;
                 #[allow(unreachable_code)]
-                Ok($cx.printer)
+                $cx.ok()
             }
         }
 
@@ -1544,7 +1551,7 @@ define_print_and_forward_display! {
     ty::InferTy {
         if cx.tcx.sess.verbose() {
             p!(write("{:?}", self));
-            return Ok(cx.printer);
+            return cx.ok();
         }
         match *self {
             ty::TyVar(_) => p!(write("_")),
