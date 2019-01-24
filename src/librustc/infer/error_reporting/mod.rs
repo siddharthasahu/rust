@@ -447,7 +447,7 @@ impl<'a, 'gcx, 'tcx> InferCtxt<'a, 'gcx, 'tcx> {
     ) {
         use hir::def_id::CrateNum;
         use ty::print::{PrintCx, Printer};
-        use ty::subst::Substs;
+        use ty::subst::Kind;
 
         struct AbsolutePathPrinter;
 
@@ -514,8 +514,7 @@ impl<'a, 'gcx, 'tcx> InferCtxt<'a, 'gcx, 'tcx> {
                 print_prefix: impl FnOnce(
                     PrintCx<'_, 'gcx, 'tcx, Self>,
                 ) -> Result<Self::Path, Self::Error>,
-                _params: &[ty::GenericParamDef],
-                _substs: &'tcx Substs<'tcx>,
+                _args: impl Iterator<Item = Kind<'tcx>> + Clone,
                 _projections: impl Iterator<Item = ty::ExistentialProjection<'tcx>>,
             ) -> Result<Self::Path, Self::Error> {
                 print_prefix(self)
