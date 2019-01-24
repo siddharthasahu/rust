@@ -55,7 +55,7 @@ use hir;
 use hir::def_id::DefId;
 use hir::Node;
 use middle::region;
-use std::{cmp, fmt, iter};
+use std::{cmp, fmt};
 use syntax::ast::DUMMY_NODE_ID;
 use syntax_pos::{Pos, Span};
 use traits::{ObligationCause, ObligationCauseCode};
@@ -459,6 +459,7 @@ impl<'a, 'gcx, 'tcx> InferCtxt<'a, 'gcx, 'tcx> {
             type Path = Vec<String>;
             type Region = !;
             type Type = !;
+            type DynExistential = !;
 
             fn print_region(
                 self: PrintCx<'_, '_, '_, Self>,
@@ -471,6 +472,13 @@ impl<'a, 'gcx, 'tcx> InferCtxt<'a, 'gcx, 'tcx> {
                 self: PrintCx<'_, '_, 'tcx, Self>,
                 _ty: Ty<'tcx>,
             ) -> Result<Self::Type, Self::Error> {
+                Err(NonTrivialPath)
+            }
+
+            fn print_dyn_existential<'tcx>(
+                self: PrintCx<'_, '_, 'tcx, Self>,
+                _predicates: &'tcx ty::List<ty::ExistentialPredicate<'tcx>>,
+            ) -> Result<Self::DynExistential, Self::Error> {
                 Err(NonTrivialPath)
             }
 
@@ -514,8 +522,7 @@ impl<'a, 'gcx, 'tcx> InferCtxt<'a, 'gcx, 'tcx> {
                 print_prefix: impl FnOnce(
                     PrintCx<'_, 'gcx, 'tcx, Self>,
                 ) -> Result<Self::Path, Self::Error>,
-                _args: impl Iterator<Item = Kind<'tcx>> + Clone,
-                _projections: impl Iterator<Item = ty::ExistentialProjection<'tcx>>,
+                _args: &[Kind<'tcx>],
             ) -> Result<Self::Path, Self::Error> {
                 print_prefix(self)
             }
@@ -527,7 +534,7 @@ impl<'a, 'gcx, 'tcx> InferCtxt<'a, 'gcx, 'tcx> {
             if !(did1.is_local() || did2.is_local()) && did1.krate != did2.krate {
                 let abs_path = |def_id| {
                     PrintCx::new(self.tcx, AbsolutePathPrinter)
-                        .print_def_path(def_id, None, iter::empty())
+                        .print_def_path(def_id, None)
                 };
 
                 // We compare strings because DefPath can be different

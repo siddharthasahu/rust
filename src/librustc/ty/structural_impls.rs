@@ -14,7 +14,6 @@ use smallvec::SmallVec;
 use mir::interpret;
 
 use std::fmt;
-use std::iter;
 use std::rc::Rc;
 
 impl fmt::Debug for ty::GenericParamDef {
@@ -34,7 +33,7 @@ impl fmt::Debug for ty::GenericParamDef {
 impl fmt::Debug for ty::TraitDef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         PrintCx::with_tls_tcx(FmtPrinter::new(f, Namespace::TypeNS), |cx| {
-            cx.print_def_path(self.def_id, None, iter::empty())?;
+            cx.print_def_path(self.def_id, None)?;
             Ok(())
         })
     }
@@ -43,7 +42,7 @@ impl fmt::Debug for ty::TraitDef {
 impl fmt::Debug for ty::AdtDef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         PrintCx::with_tls_tcx(FmtPrinter::new(f, Namespace::TypeNS), |cx| {
-            cx.print_def_path(self.did, None, iter::empty())?;
+            cx.print_def_path(self.did, None)?;
             Ok(())
         })
     }
