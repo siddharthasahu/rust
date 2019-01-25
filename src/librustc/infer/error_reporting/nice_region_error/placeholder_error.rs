@@ -8,7 +8,7 @@ use traits::{ObligationCause, ObligationCauseCode};
 use ty;
 use ty::error::ExpectedFound;
 use ty::subst::Substs;
-use ty::print::{Print, PrettyPrinter};
+use ty::print::Print;
 use util::common::ErrorReported;
 
 use std::fmt::Write;
@@ -253,9 +253,11 @@ impl NiceRegionError<'me, 'gcx, 'tcx> {
             let _ = (|| {
                 let mut cx = ty::print::PrintCx::new(self.tcx, printer);
                 write!(cx, "`")?;
-                cx = cx.nest(|cx| expected_trait_ref.self_ty().print(cx))?;
+                cx = ty::print::PrintCx::new(self.tcx,
+                    expected_trait_ref.self_ty().print(cx)?);
                 write!(cx, "` must implement `")?;
-                cx = cx.nest(|cx| expected_trait_ref.print(cx))?;
+                cx = ty::print::PrintCx::new(self.tcx,
+                    expected_trait_ref.print(cx)?);
                 write!(cx, "`")
             })();
 
@@ -287,9 +289,11 @@ impl NiceRegionError<'me, 'gcx, 'tcx> {
             let _ = (|| {
                 let mut cx = ty::print::PrintCx::new(self.tcx, printer);
                 write!(cx, "but `")?;
-                cx = cx.nest(|cx| actual_trait_ref.self_ty().print(cx))?;
+                cx = ty::print::PrintCx::new(self.tcx,
+                    actual_trait_ref.self_ty().print(cx)?);
                 write!(cx, "` only implements `")?;
-                cx = cx.nest(|cx| actual_trait_ref.print(cx))?;
+                cx = ty::print::PrintCx::new(self.tcx,
+                    actual_trait_ref.print(cx)?);
                 write!(cx, "`")
             })();
 

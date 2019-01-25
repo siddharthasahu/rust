@@ -446,7 +446,7 @@ impl Printer for SymbolPath {
                 write!(self, "+")?;
             }
             first = false;
-            self = self.nest(|cx| p.print(cx))?;
+            self = PrintCx::new(self.tcx, p.print(self)?);
         }
         self.ok()
     }
@@ -521,7 +521,7 @@ impl Printer for SymbolPath {
         ) -> Result<Self::Path, Self::Error>,
         args: &[Kind<'tcx>],
     )  -> Result<Self::Path, Self::Error> {
-        self = self.nest(print_prefix)?;
+        self = PrintCx::new(self.tcx, print_prefix(self)?);
 
         let args = args.iter().cloned().filter(|arg| {
             match arg.unpack() {
@@ -552,10 +552,10 @@ impl PrettyPrinter for SymbolPath {
         where T: Print<'tcx, Self, Output = Self, Error = Self::Error>
     {
         if let Some(first) = elems.next() {
-            self = self.nest(|cx| first.print(cx))?;
+            self = PrintCx::new(self.tcx, first.print(self)?);
             for elem in elems {
                 self.write_str(",")?;
-                self = self.nest(|cx| elem.print(cx))?;
+                self = PrintCx::new(self.tcx, elem.print(self)?);
             }
         }
         self.ok()
