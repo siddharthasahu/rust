@@ -2,7 +2,7 @@ use hir::Unsafety;
 use hir::def::Namespace;
 use hir::def_id::DefId;
 use ty::{self, Ty, PolyFnSig, TypeFoldable, Substs, TyCtxt};
-use ty::print::{FmtPrinter, Printer, PrintCx};
+use ty::print::{FmtPrinter, Printer};
 use traits;
 use rustc_target::spec::abi::Abi;
 
@@ -175,9 +175,10 @@ impl<'tcx> InstanceDef<'tcx> {
 
 impl<'tcx> fmt::Display for Instance<'tcx> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        PrintCx::with_tls_tcx(FmtPrinter::new(&mut *f, Namespace::ValueNS), |cx| {
-            let substs = cx.tcx.lift(&self.substs).expect("could not lift for printing");
-            cx.print_def_path(self.def_id(), Some(substs))?;
+        ty::tls::with(|tcx| {
+            let substs = tcx.lift(&self.substs).expect("could not lift for printing");
+            FmtPrinter::new(tcx, &mut *f, Namespace::ValueNS)
+                .print_def_path(self.def_id(), Some(substs))?;
             Ok(())
         })?;
 

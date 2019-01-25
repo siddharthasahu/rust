@@ -246,18 +246,16 @@ impl NiceRegionError<'me, 'gcx, 'tcx> {
 
         {
             let mut note = String::new();
-            let mut printer = ty::print::FmtPrinter::new(&mut note, Namespace::TypeNS);
+            let mut printer = ty::print::FmtPrinter::new(self.tcx, &mut note, Namespace::TypeNS);
             printer.region_highlight_mode.maybe_highlighting_region(sub_placeholder, has_sub);
             printer.region_highlight_mode.maybe_highlighting_region(sup_placeholder, has_sup);
 
             let _ = (|| {
-                let mut cx = ty::print::PrintCx::new(self.tcx, printer);
+                let mut cx = printer;
                 write!(cx, "`")?;
-                cx = ty::print::PrintCx::new(self.tcx,
-                    expected_trait_ref.self_ty().print(cx)?);
+                cx = expected_trait_ref.self_ty().print(cx)?;
                 write!(cx, "` must implement `")?;
-                cx = ty::print::PrintCx::new(self.tcx,
-                    expected_trait_ref.print(cx)?);
+                cx = expected_trait_ref.print(cx)?;
                 write!(cx, "`")
             })();
 
@@ -283,17 +281,15 @@ impl NiceRegionError<'me, 'gcx, 'tcx> {
 
         {
             let mut note = String::new();
-            let mut printer = ty::print::FmtPrinter::new(&mut note, Namespace::TypeNS);
+            let mut printer = ty::print::FmtPrinter::new(self.tcx, &mut note, Namespace::TypeNS);
             printer.region_highlight_mode.maybe_highlighting_region(vid, has_vid);
 
             let _ = (|| {
-                let mut cx = ty::print::PrintCx::new(self.tcx, printer);
+                let mut cx = printer;
                 write!(cx, "but `")?;
-                cx = ty::print::PrintCx::new(self.tcx,
-                    actual_trait_ref.self_ty().print(cx)?);
+                cx = actual_trait_ref.self_ty().print(cx)?;
                 write!(cx, "` only implements `")?;
-                cx = ty::print::PrintCx::new(self.tcx,
-                    actual_trait_ref.print(cx)?);
+                cx = actual_trait_ref.print(cx)?;
                 write!(cx, "`")
             })();
 
