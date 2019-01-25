@@ -6,7 +6,6 @@ use middle::region;
 use ty::{self, DefIdTree, Ty, TyCtxt, TypeFoldable};
 use ty::subst::{Kind, Subst, Substs, UnpackedKind};
 use middle::cstore::{ExternCrate, ExternCrateSource};
-use syntax::ast;
 use syntax::symbol::{keywords, Symbol};
 
 use rustc_target::spec::abi::Abi;
@@ -353,14 +352,11 @@ pub trait PrettyPrinter<'gcx: 'tcx, 'tcx>:
             // `visible_parent_map`), looking for the specific child we currently have and then
             // have access to the re-exported name.
             DefPathData::Module(actual_name) |
-            DefPathData::TypeNs(actual_name) if visible_parent != actual_parent => {
-                visible_parent
-                    .and_then(|parent| {
-                        self.tcx().item_children(parent)
-                            .iter()
-                            .find(|child| child.def.def_id() == cur_def)
-                            .map(|child| child.ident.as_str())
-                    })
+            DefPathData::TypeNs(actual_name) if Some(visible_parent) != actual_parent => {
+                self.tcx().item_children(visible_parent)
+                    .iter()
+                    .find(|child| child.def.def_id() == def_id)
+                    .map(|child| child.ident.as_str())
                     .unwrap_or_else(|| actual_name.as_str())
             }
             _ => {
