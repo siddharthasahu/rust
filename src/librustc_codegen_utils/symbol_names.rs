@@ -106,6 +106,8 @@ use syntax_pos::symbol::Symbol;
 use std::fmt::{self, Write};
 use std::mem::{self, discriminant};
 
+mod new;
+
 pub fn provide(providers: &mut Providers) {
     *providers = Providers {
         def_symbol_name,
@@ -118,9 +120,6 @@ pub fn provide(providers: &mut Providers) {
 fn get_symbol_hash<'a, 'tcx>(
     tcx: TyCtxt<'a, 'tcx, 'tcx>,
 
-    // the DefId of the item this name is for
-    def_id: DefId,
-
     // instance this name will be for
     instance: Instance<'tcx>,
 
@@ -129,11 +128,9 @@ fn get_symbol_hash<'a, 'tcx>(
     // included in the hash as a kind of
     // safeguard.
     item_type: Ty<'tcx>,
-
-    // values for generic type parameters,
-    // if any.
-    substs: &'tcx Substs<'tcx>,
 ) -> u64 {
+    let def_id = instance.def_id();
+    let substs = instance.substs;
     debug!(
         "get_symbol_hash(def_id={:?}, parameters={:?})",
         def_id, substs
@@ -170,42 +167,7 @@ fn get_symbol_hash<'a, 'tcx>(
         assert!(!substs.needs_subst());
         substs.hash_stable(&mut hcx, &mut hasher);
 
-        let is_generic = substs.types().next().is_some();
-        let avoid_cross_crate_conflicts =
-            // If this is an instance of a generic function, we also hash in
-            // the ID of the instantiating crate. This avoids symbol conflicts
-            // in case the same instances is emitted in two crates of the same
-            // project.
-            is_generic ||
-
-            // If we're dealing with an instance of a function that's inlined from
-            // another crate but we're marking it as globally shared to our
-            // compliation (aka we're not making an internal copy in each of our
-            // codegen units) then this symbol may become an exported (but hidden
-            // visibility) symbol. This means that multiple crates may do the same
-            // and we want to be sure to avoid any symbol conflicts here.
-            match MonoItem::Fn(instance).instantiation_mode(tcx) {
-                InstantiationMode::GloballyShared { may_conflict: true } => true,
-                _ => false,
-            };
-
-        if avoid_cross_crate_conflicts {
-            let instantiating_crate = if is_generic {
-                if !def_id.is_local() && tcx.sess.opts.share_generics() {
-                    // If we are re-using a monomorphization from another crate,
-                    // we have to compute the symbol hash accordingly.
-                    let upstream_monomorphizations = tcx.upstream_monomorphizations_for(def_id);
-
-                    upstream_monomorphizations
-                        .and_then(|monos| monos.get(&substs).cloned())
-                        .unwrap_or(LOCAL_CRATE)
-                } else {
-                    LOCAL_CRATE
-                }
-            } else {
-                LOCAL_CRATE
-            };
-
+        if let Some(instantiating_crate) = instantiating_crate(tcx, instance) {
             (&tcx.original_crate_name(instantiating_crate).as_str()[..])
                 .hash_stable(&mut hcx, &mut hasher);
             (&tcx.crate_disambiguator(instantiating_crate)).hash_stable(&mut hcx, &mut hasher);
@@ -218,6 +180,53 @@ fn get_symbol_hash<'a, 'tcx>(
 
     // 64 bits should be enough to avoid collisions.
     hasher.finish()
+}
+
+fn instantiating_crate(
+    tcx: TyCtxt<'_, 'tcx, 'tcx>,
+    instance: Instance<'tcx>,
+) -> Option<CrateNum> {
+    let def_id = instance.def_id();
+    let substs = instance.substs;
+
+    let is_generic = substs.types().next().is_some();
+    let avoid_cross_crate_conflicts =
+        // If this is an instance of a generic function, we also hash in
+        // the ID of the instantiating crate. This avoids symbol conflicts
+        // in case the same instances is emitted in two crates of the same
+        // project.
+        is_generic ||
+
+        // If we're dealing with an instance of a function that's inlined from
+        // another crate but we're marking it as globally shared to our
+        // compliation (aka we're not making an internal copy in each of our
+        // codegen units) then this symbol may become an exported (but hidden
+        // visibility) symbol. This means that multiple crates may do the same
+        // and we want to be sure to avoid any symbol conflicts here.
+        match MonoItem::Fn(instance).instantiation_mode(tcx) {
+            InstantiationMode::GloballyShared { may_conflict: true } => true,
+            _ => false,
+        };
+
+    if avoid_cross_crate_conflicts {
+        Some(if is_generic {
+            if !def_id.is_local() && tcx.sess.opts.share_generics() {
+                // If we are re-using a monomorphization from another crate,
+                // we have to compute the symbol hash accordingly.
+                let upstream_monomorphizations = tcx.upstream_monomorphizations_for(def_id);
+
+                upstream_monomorphizations
+                    .and_then(|monos| monos.get(&substs).cloned())
+                    .unwrap_or(LOCAL_CRATE)
+            } else {
+                LOCAL_CRATE
+            }
+        } else {
+            LOCAL_CRATE
+        })
+    } else {
+        None
+    }
 }
 
 fn def_symbol_name<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, def_id: DefId) -> ty::SymbolName {
@@ -282,6 +291,12 @@ fn compute_symbol_name<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, instance: Instance
         return tcx.item_name(def_id).to_string();
     }
 
+    compute_mangled_symbol_name(tcx, instance)
+}
+
+fn compute_mangled_symbol_name(tcx: TyCtxt<'_, 'tcx, 'tcx>, instance: Instance<'tcx>) -> String {
+    let def_id = instance.def_id();
+
     // We want to compute the "type" of this item. Unfortunately, some
     // kinds of items (e.g., closures) don't have an entry in the
     // item-type array. So walk back up the find the closest parent
@@ -315,7 +330,7 @@ fn compute_symbol_name<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, instance: Instance
     // and should not matter anyhow.
     let instance_ty = tcx.erase_regions(&instance_ty);
 
-    let hash = get_symbol_hash(tcx, def_id, instance, instance_ty, substs);
+    let hash = get_symbol_hash(tcx, instance, instance_ty);
 
     let mut buf = SymbolPath::from_interned(tcx.def_symbol_name(def_id));
 

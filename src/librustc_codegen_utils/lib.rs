@@ -9,8 +9,10 @@
 #![feature(arbitrary_self_types)]
 #![feature(box_patterns)]
 #![feature(box_syntax)]
+#![feature(core_intrinsics)]
 #![feature(custom_attribute)]
 #![feature(in_band_lifetimes)]
+#![feature(never_type)]
 #![feature(nll)]
 #![allow(unused_attributes)]
 #![feature(rustc_diagnostic_macros)]
@@ -20,6 +22,7 @@
 extern crate flate2;
 #[macro_use]
 extern crate log;
+extern crate punycode;
 
 #[macro_use]
 extern crate rustc;
