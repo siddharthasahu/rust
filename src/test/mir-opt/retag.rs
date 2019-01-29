@@ -98,7 +98,7 @@ fn main() {
 // }
 // END rustc.main.EraseRegions.after.mir
 // START rustc.main-{{closure}}.EraseRegions.after.mir
-// fn main::{{closure}}(_1: &[closure@NodeId(124)], _2: &i32) -> &i32 {
+// fn main::{{closure}}#0(_1: &[closure@NodeId(124)], _2: &i32) -> &i32 {
 //     ...
 //     bb0: {
 //         Retag([fn entry] _1);

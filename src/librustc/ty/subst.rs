@@ -10,8 +10,8 @@ use syntax_pos::{Span, DUMMY_SP};
 use smallvec::SmallVec;
 
 use core::intrinsics;
-use std::cmp::Ordering;
 use std::fmt;
+use std::cmp::Ordering;
 use std::marker::PhantomData;
 use std::mem;
 use std::num::NonZeroUsize;
@@ -61,6 +61,15 @@ impl<'tcx> UnpackedKind<'tcx> {
     }
 }
 
+impl fmt::Debug for Kind<'tcx> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.unpack() {
+            UnpackedKind::Lifetime(lt) => lt.fmt(f),
+            UnpackedKind::Type(ty) => ty.fmt(f),
+        }
+    }
+}
+
 impl<'tcx> Ord for Kind<'tcx> {
     fn cmp(&self, other: &Kind<'_>) -> Ordering {
         self.unpack().cmp(&other.unpack())
@@ -99,31 +108,13 @@ impl<'tcx> Kind<'tcx> {
     }
 }
 
-impl<'tcx> fmt::Debug for Kind<'tcx> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.unpack() {
-            UnpackedKind::Lifetime(lt) => write!(f, "{:?}", lt),
-            UnpackedKind::Type(ty) => write!(f, "{:?}", ty),
-        }
-    }
-}
-
-impl<'tcx> fmt::Display for Kind<'tcx> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.unpack() {
-            UnpackedKind::Lifetime(lt) => write!(f, "{}", lt),
-            UnpackedKind::Type(ty) => write!(f, "{}", ty),
-        }
-    }
-}
-
 impl<'a, 'tcx> Lift<'tcx> for Kind<'a> {
     type Lifted = Kind<'tcx>;
 
     fn lift_to_tcx<'cx, 'gcx>(&self, tcx: TyCtxt<'cx, 'gcx, 'tcx>) -> Option<Self::Lifted> {
         match self.unpack() {
-            UnpackedKind::Lifetime(a) => a.lift_to_tcx(tcx).map(|a| a.into()),
-            UnpackedKind::Type(a) => a.lift_to_tcx(tcx).map(|a| a.into()),
+            UnpackedKind::Lifetime(a) => tcx.lift(&a).map(|a| a.into()),
+            UnpackedKind::Type(a) => tcx.lift(&a).map(|a| a.into()),
         }
     }
 }

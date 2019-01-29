@@ -12,7 +12,7 @@ use hir::CodegenFnAttrFlags;
 use hir::def_id::{DefId, LOCAL_CRATE};
 use lint;
 use middle::privacy;
-use ty::{self, TyCtxt};
+use ty::{self, DefIdTree, TyCtxt};
 use util::nodemap::FxHashSet;
 
 use rustc_data_structures::fx::FxHashMap;
@@ -78,7 +78,7 @@ impl<'a, 'tcx> MarkSymbolVisitor<'a, 'tcx> {
             Def::PrimTy(..) | Def::SelfTy(..) | Def::SelfCtor(..) |
             Def::Local(..) | Def::Upvar(..) => {}
             Def::Variant(variant_id) | Def::VariantCtor(variant_id, ..) => {
-                if let Some(enum_id) = self.tcx.parent_def_id(variant_id) {
+                if let Some(enum_id) = self.tcx.parent(variant_id) {
                     self.check_def_id(enum_id);
                 }
                 if !self.ignore_variant_stack.contains(&variant_id) {

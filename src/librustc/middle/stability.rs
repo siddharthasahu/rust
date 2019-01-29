@@ -604,7 +604,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
                                .map_or(false, |parent_depr| parent_depr.same_origin(&depr_entry));
 
                 if let Some(since) = deprecated_in_future_version {
-                    let path = self.item_path_str(def_id);
+                    let path = self.def_path_str(def_id);
                     let message = format!("use of item '{}' \
                                            that will be deprecated in future version {}",
                                           path,
@@ -616,7 +616,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
                                     &message,
                                     lint::builtin::DEPRECATED_IN_FUTURE);
                 } else if !skip {
-                    let path = self.item_path_str(def_id);
+                    let path = self.def_path_str(def_id);
                     let message = format!("use of deprecated item '{}'", path);
                     lint_deprecated(def_id,
                                     id,
@@ -642,7 +642,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         if let Some(&Stability{rustc_depr: Some(attr::RustcDeprecation { reason, since }), ..})
                 = stability {
             if let Some(id) = id {
-                let path = self.item_path_str(def_id);
+                let path = self.def_path_str(def_id);
                 if deprecation_in_effect(&since.as_str()) {
                     let message = format!("use of deprecated item '{}'", path);
                     lint_deprecated(def_id,

@@ -12,9 +12,14 @@ test = false
 [dependencies]
 cc = "1.0.1"
 num_cpus = "1.0"
-rustc-demangle = "0.1.4"
+# rustc-demangle = "0.1.4"
 rustc_llvm = { path = "../librustc_llvm" }
 memmap = "0.6"
+
+# HACK(eddyb) temporary until upstreaming support for the new mangling scheme
+[dependencies.rustc-demangle]
+git = "https://github.com/eddyb/rustc-demangle"
+rev = "20d5bcc9bcea0d9413540916dd5f9fdadc7012f7"
 
 [features]
 # This is used to convince Cargo to separately cache builds of `rustc_codegen_llvm`

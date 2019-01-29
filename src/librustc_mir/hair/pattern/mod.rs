@@ -14,7 +14,7 @@ use hair::constant::*;
 use rustc::mir::{fmt_const_val, Field, BorrowKind, Mutability};
 use rustc::mir::{UserTypeProjection};
 use rustc::mir::interpret::{Scalar, GlobalId, ConstValue, sign_extend};
-use rustc::ty::{self, Region, TyCtxt, AdtDef, Ty, Lift, UserType};
+use rustc::ty::{self, DefIdTree, Region, TyCtxt, AdtDef, Ty, Lift, UserType};
 use rustc::ty::{CanonicalUserType, CanonicalUserTypeAnnotation, CanonicalUserTypeAnnotations};
 use rustc::ty::subst::{Substs, Kind};
 use rustc::ty::layout::VariantIdx;
@@ -484,11 +484,11 @@ impl<'a, 'tcx> PatternContext<'a, 'tcx> {
                     ty::Error => { // Avoid ICE
                         return Pattern { span: pat.span, ty, kind: Box::new(PatternKind::Wild) };
                     }
-                    ref sty =>
+                    _ =>
                         span_bug!(
                             pat.span,
                             "unexpanded type for vector pattern: {:?}",
-                            sty),
+                            ty),
                 }
             }
 
@@ -509,7 +509,7 @@ impl<'a, 'tcx> PatternContext<'a, 'tcx> {
                     ty::Error => { // Avoid ICE (#50577)
                         return Pattern { span: pat.span, ty, kind: Box::new(PatternKind::Wild) };
                     }
-                    ref sty => span_bug!(pat.span, "unexpected type for tuple pattern: {:?}", sty),
+                    _ => span_bug!(pat.span, "unexpected type for tuple pattern: {:?}", ty),
                 }
             }
 
@@ -563,7 +563,7 @@ impl<'a, 'tcx> PatternContext<'a, 'tcx> {
                     }
                     _ => span_bug!(pat.span,
                                    "tuple struct pattern not applied to an ADT {:?}",
-                                   ty.sty),
+                                   ty),
                 };
                 let variant_def = adt_def.variant_of_def(def);
 
@@ -690,7 +690,7 @@ impl<'a, 'tcx> PatternContext<'a, 'tcx> {
     ) -> PatternKind<'tcx> {
         let mut kind = match def {
             Def::Variant(variant_id) | Def::VariantCtor(variant_id, ..) => {
-                let enum_id = self.tcx.parent_def_id(variant_id).unwrap();
+                let enum_id = self.tcx.parent(variant_id).unwrap();
                 let adt_def = self.tcx.adt_def(enum_id);
                 if adt_def.is_enum() {
                     let substs = match ty.sty {
@@ -699,7 +699,7 @@ impl<'a, 'tcx> PatternContext<'a, 'tcx> {
                         ty::Error => {  // Avoid ICE (#50585)
                             return PatternKind::Wild;
                         }
-                        _ => bug!("inappropriate type for def: {:?}", ty.sty),
+                        _ => bug!("inappropriate type for def: {:?}", ty),
                     };
                     PatternKind::Variant {
                         adt_def,
@@ -924,8 +924,8 @@ impl<'a, 'tcx> PatternContext<'a, 'tcx> {
             ty::Adt(adt_def, _) if !self.tcx.has_attr(adt_def.did, "structural_match") => {
                 let msg = format!("to use a constant of type `{}` in a pattern, \
                                     `{}` must be annotated with `#[derive(PartialEq, Eq)]`",
-                                    self.tcx.item_path_str(adt_def.did),
-                                    self.tcx.item_path_str(adt_def.did));
+                                    self.tcx.def_path_str(adt_def.did),
+                                    self.tcx.def_path_str(adt_def.did));
                 self.tcx.sess.span_err(span, &msg);
                 PatternKind::Wild
             },

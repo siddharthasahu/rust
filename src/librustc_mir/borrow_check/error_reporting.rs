@@ -3,6 +3,7 @@ use borrow_check::nll::region_infer::{RegionName, RegionNameSource};
 use borrow_check::prefixes::IsPrefixOf;
 use borrow_check::WriteKind;
 use rustc::hir;
+use rustc::hir::def::Namespace;
 use rustc::hir::def_id::DefId;
 use rustc::middle::region::ScopeTree;
 use rustc::mir::{
@@ -12,7 +13,7 @@ use rustc::mir::{
     TerminatorKind, VarBindingForm,
 };
 use rustc::ty::{self, DefIdTree};
-use rustc::util::ppaux::RegionHighlightMode;
+use rustc::ty::print::Print;
 use rustc_data_structures::fx::FxHashSet;
 use rustc_data_structures::indexed_vec::Idx;
 use rustc_data_structures::sync::Lrc;
@@ -826,7 +827,7 @@ impl<'cx, 'gcx, 'tcx> MirBorrowckCtxt<'cx, 'gcx, 'tcx> {
         );
 
         if let Some(annotation) = self.annotate_argument_and_return_for_borrow(borrow) {
-            let region_name = annotation.emit(&mut err);
+            let region_name = annotation.emit(self, &mut err);
 
             err.span_label(
                 borrow_span,
@@ -1786,7 +1787,7 @@ impl<'cx, 'gcx, 'tcx> MirBorrowckCtxt<'cx, 'gcx, 'tcx> {
                     // (https://github.com/rust-lang/rfcs/pull/1546)
                     bug!(
                         "End-user description not implemented for field access on `{:?}`",
-                        ty.sty
+                        ty
                     );
                 }
             }
@@ -1860,7 +1861,7 @@ impl<'cx, 'gcx, 'tcx> MirBorrowckCtxt<'cx, 'gcx, 'tcx> {
     fn annotate_argument_and_return_for_borrow(
         &self,
         borrow: &BorrowData<'tcx>,
-    ) -> Option<AnnotatedBorrowFnSignature> {
+    ) -> Option<AnnotatedBorrowFnSignature<'tcx>> {
         // Define a fallback for when we can't match a closure.
         let fallback = || {
             let is_closure = self.infcx.tcx.is_closure(self.mir_def_id);
@@ -2081,7 +2082,7 @@ impl<'cx, 'gcx, 'tcx> MirBorrowckCtxt<'cx, 'gcx, 'tcx> {
         &self,
         did: DefId,
         sig: ty::PolyFnSig<'tcx>,
-    ) -> Option<AnnotatedBorrowFnSignature> {
+    ) -> Option<AnnotatedBorrowFnSignature<'tcx>> {
         debug!("annotate_fn_sig: did={:?} sig={:?}", did, sig);
         let is_closure = self.infcx.tcx.is_closure(did);
         let fn_node_id = self.infcx.tcx.hir().as_local_node_id(did)?;
@@ -2227,7 +2228,11 @@ enum AnnotatedBorrowFnSignature<'tcx> {
 impl<'tcx> AnnotatedBorrowFnSignature<'tcx> {
     /// Annotate the provided diagnostic with information about borrow from the fn signature that
     /// helps explain.
-    fn emit(&self, diag: &mut DiagnosticBuilder<'_>) -> String {
+    fn emit(
+        &self,
+        cx: &mut MirBorrowckCtxt<'_, '_, 'tcx>,
+        diag: &mut DiagnosticBuilder<'_>,
+    ) -> String {
         match self {
             AnnotatedBorrowFnSignature::Closure {
                 argument_ty,
@@ -2235,10 +2240,10 @@ impl<'tcx> AnnotatedBorrowFnSignature<'tcx> {
             } => {
                 diag.span_label(
                     *argument_span,
-                    format!("has type `{}`", self.get_name_for_ty(argument_ty, 0)),
+                    format!("has type `{}`", cx.get_name_for_ty(argument_ty, 0)),
                 );
 
-                self.get_region_name_for_ty(argument_ty, 0)
+                cx.get_region_name_for_ty(argument_ty, 0)
             }
             AnnotatedBorrowFnSignature::AnonymousFunction {
                 argument_ty,
@@ -2246,10 +2251,10 @@ impl<'tcx> AnnotatedBorrowFnSignature<'tcx> {
                 return_ty,
                 return_span,
             } => {
-                let argument_ty_name = self.get_name_for_ty(argument_ty, 0);
+                let argument_ty_name = cx.get_name_for_ty(argument_ty, 0);
                 diag.span_label(*argument_span, format!("has type `{}`", argument_ty_name));
 
-                let return_ty_name = self.get_name_for_ty(return_ty, 0);
+                let return_ty_name = cx.get_name_for_ty(return_ty, 0);
                 let types_equal = return_ty_name == argument_ty_name;
                 diag.span_label(
                     *return_span,
@@ -2268,7 +2273,7 @@ impl<'tcx> AnnotatedBorrowFnSignature<'tcx> {
                      lifetime-syntax.html#lifetime-elision>",
                 );
 
-                self.get_region_name_for_ty(return_ty, 0)
+                cx.get_region_name_for_ty(return_ty, 0)
             }
             AnnotatedBorrowFnSignature::NamedFunction {
                 arguments,
@@ -2276,7 +2281,7 @@ impl<'tcx> AnnotatedBorrowFnSignature<'tcx> {
                 return_span,
             } => {
                 // Region of return type and arguments checked to be the same earlier.
-                let region_name = self.get_region_name_for_ty(return_ty, 0);
+                let region_name = cx.get_region_name_for_ty(return_ty, 0);
                 for (_, argument_span) in arguments {
                     diag.span_label(*argument_span, format!("has lifetime `{}`", region_name));
                 }
@@ -2296,10 +2301,15 @@ impl<'tcx> AnnotatedBorrowFnSignature<'tcx> {
             }
         }
     }
+}
 
+impl<'cx, 'gcx, 'tcx> MirBorrowckCtxt<'cx, 'gcx, 'tcx> {
     /// Return the name of the provided `Ty` (that must be a reference) with a synthesized lifetime
     /// name where required.
     fn get_name_for_ty(&self, ty: ty::Ty<'tcx>, counter: usize) -> String {
+        let mut s = String::new();
+        let mut printer = ty::print::FmtPrinter::new(self.infcx.tcx, &mut s, Namespace::TypeNS);
+
         // We need to add synthesized lifetimes where appropriate. We do
         // this by hooking into the pretty printer and telling it to label the
         // lifetimes without names with the value `'0`.
@@ -2309,28 +2319,37 @@ impl<'tcx> AnnotatedBorrowFnSignature<'tcx> {
                 ty::RegionKind::RePlaceholder(ty::PlaceholderRegion { name: br, .. }),
                 _,
                 _,
-            ) => RegionHighlightMode::highlighting_bound_region(*br, counter, || ty.to_string()),
-            _ => ty.to_string(),
+            ) => printer.region_highlight_mode.highlighting_bound_region(*br, counter),
+            _ => {}
         }
+
+        let _ = ty.print(printer);
+        s
     }
 
     /// Return the name of the provided `Ty` (that must be a reference)'s region with a
     /// synthesized lifetime name where required.
     fn get_region_name_for_ty(&self, ty: ty::Ty<'tcx>, counter: usize) -> String {
-        match ty.sty {
-            ty::TyKind::Ref(region, _, _) => match region {
-                ty::RegionKind::ReLateBound(_, br)
-                | ty::RegionKind::RePlaceholder(ty::PlaceholderRegion { name: br, .. }) => {
-                    RegionHighlightMode::highlighting_bound_region(
-                        *br,
-                        counter,
-                        || region.to_string(),
-                    )
+        let mut s = String::new();
+        let mut printer = ty::print::FmtPrinter::new(self.infcx.tcx, &mut s, Namespace::TypeNS);
+
+        let region = match ty.sty {
+            ty::TyKind::Ref(region, _, _) => {
+                match region {
+                    ty::RegionKind::ReLateBound(_, br)
+                    | ty::RegionKind::RePlaceholder(ty::PlaceholderRegion { name: br, .. }) => {
+                        printer.region_highlight_mode.highlighting_bound_region(*br, counter)
+                    }
+                    _ => {}
                 }
-                _ => region.to_string(),
-            },
+
+                region
+            }
             _ => bug!("ty for annotation of borrow region is not a reference"),
-        }
+        };
+
+        let _ = region.print(printer);
+        s
     }
 }
 

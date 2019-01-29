@@ -8,7 +8,7 @@ use middle::region;
 use polonius_engine::Atom;
 use rustc_data_structures::indexed_vec::Idx;
 use ty::subst::{Substs, Subst, Kind, UnpackedKind};
-use ty::{self, AdtDef, TypeFlags, Ty, TyCtxt, TypeFoldable};
+use ty::{self, AdtDef, DefIdTree, TypeFlags, Ty, TyCtxt, TypeFoldable};
 use ty::{List, TyS, ParamEnvAnd, ParamEnv};
 use util::captures::Captures;
 use mir::interpret::{Scalar, Pointer};
@@ -81,7 +81,7 @@ impl BoundRegion {
 
 /// N.B., if you change this, you'll probably want to change the corresponding
 /// AST structure in `libsyntax/ast.rs` as well.
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, RustcEncodable, RustcDecodable)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, RustcEncodable, RustcDecodable)]
 pub enum TyKind<'tcx> {
     /// The primitive boolean type. Written as `bool`.
     Bool,
@@ -377,9 +377,10 @@ impl<'tcx> ClosureSubsts<'tcx> {
     ///
     /// If you have an inference context, use `infcx.closure_sig()`.
     pub fn closure_sig(self, def_id: DefId, tcx: TyCtxt<'_, 'tcx, 'tcx>) -> ty::PolyFnSig<'tcx> {
-        match self.closure_sig_ty(def_id, tcx).sty {
+        let ty = self.closure_sig_ty(def_id, tcx);
+        match ty.sty {
             ty::FnPtr(sig) => sig,
-            ref t => bug!("closure_sig_ty is not a fn-ptr: {:?}", t),
+            _ => bug!("closure_sig_ty is not a fn-ptr: {:?}", ty),
         }
     }
 }
@@ -1549,7 +1550,7 @@ impl RegionKind {
     pub fn free_region_binding_scope(&self, tcx: TyCtxt<'_, '_, '_>) -> DefId {
         match self {
             ty::ReEarlyBound(br) => {
-                tcx.parent_def_id(br.def_id).unwrap()
+                tcx.parent(br.def_id).unwrap()
             }
             ty::ReFree(fr) => fr.scope,
             _ => bug!("free_region_binding_scope invoked on inappropriate region: {:?}", self),

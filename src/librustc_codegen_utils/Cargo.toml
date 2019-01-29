@@ -12,6 +12,7 @@ test = false
 [dependencies]
 flate2 = "1.0"
 log = "0.4"
+punycode = "0.4.0"
 
 syntax = { path = "../libsyntax" }
 syntax_pos = { path = "../libsyntax_pos" }
@@ -21,3 +22,11 @@ rustc_data_structures = { path = "../librustc_data_structures" }
 rustc_metadata = { path = "../librustc_metadata" }
 rustc_mir = { path = "../librustc_mir" }
 rustc_incremental = { path = "../librustc_incremental" }
+
+[dependencies.std-mangle-rs]
+git = "https://github.com/michaelwoerister/std-mangle-rs"
+rev = "2336dcdfcc91db3cdda18eda73aca488773ac6fc"
+
+[dependencies.rustc-demangle]
+git = "https://github.com/eddyb/rustc-demangle"
+rev = "20d5bcc9bcea0d9413540916dd5f9fdadc7012f7"

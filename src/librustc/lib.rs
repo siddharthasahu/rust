@@ -30,6 +30,7 @@
        html_favicon_url = "https://doc.rust-lang.org/favicon.ico",
        html_root_url = "https://doc.rust-lang.org/nightly/")]
 
+#![feature(arbitrary_self_types)]
 #![feature(box_patterns)]
 #![feature(box_syntax)]
 #![feature(core_intrinsics)]
@@ -152,7 +153,6 @@ pub mod ty;
 pub mod util {
     pub mod captures;
     pub mod common;
-    pub mod ppaux;
     pub mod nodemap;
     pub mod time_graph;
     pub mod profiling;

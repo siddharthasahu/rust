@@ -5,8 +5,10 @@
 
 #![feature(bind_by_move_pattern_guards)]
 #![feature(rustc_private)]
+#![feature(arbitrary_self_types)]
 #![feature(box_patterns)]
 #![feature(box_syntax)]
+#![feature(in_band_lifetimes)]
 #![feature(nll)]
 #![feature(set_stdio)]
 #![feature(slice_sort_by_cached_key)]
@@ -17,6 +19,7 @@
 #![feature(const_fn)]
 #![feature(drain_filter)]
 #![feature(inner_deref)]
+#![feature(never_type)]
 
 #![recursion_limit="256"]
 

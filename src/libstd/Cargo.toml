@@ -21,8 +21,14 @@ libc = { version = "0.2.44", default-features = false, features = ['rustc-dep-of
 compiler_builtins = { version = "0.1.1" }
 profiler_builtins = { path = "../libprofiler_builtins", optional = true }
 unwind = { path = "../libunwind" }
-rustc-demangle = { version = "0.1.10", features = ['rustc-dep-of-std'] }
+# rustc-demangle = { version = "0.1.10", features = ['rustc-dep-of-std'] }
 backtrace-sys = { version = "0.1.24", features = ["rustc-dep-of-std"], optional = true }
+
+# HACK(eddyb) temporary until upstreaming support for the new mangling scheme
+[dependencies.rustc-demangle]
+git = "https://github.com/eddyb/rustc-demangle"
+rev = "20d5bcc9bcea0d9413540916dd5f9fdadc7012f7"
+features = ['rustc-dep-of-std']
 
 [dev-dependencies]
 rand = "0.6.1"

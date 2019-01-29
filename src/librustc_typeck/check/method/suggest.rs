@@ -14,7 +14,7 @@ use rustc::hir::print;
 use rustc::infer::type_variable::TypeVariableOrigin;
 use rustc::traits::Obligation;
 use rustc::ty::{self, Adt, Ty, TyCtxt, ToPolyTraitRef, ToPredicate, TypeFoldable};
-use rustc::ty::item_path::with_crate_prefix;
+use rustc::ty::print::with_crate_prefix;
 use util::nodemap::FxHashSet;
 use syntax_pos::{Span, FileName};
 use syntax::ast;
@@ -101,7 +101,7 @@ impl<'a, 'gcx, 'tcx> FnCtxt<'a, 'gcx, 'tcx> {
                             None => String::new(),
                             Some(trait_ref) => {
                                 format!(" of the trait `{}`",
-                                        self.tcx.item_path_str(trait_ref.def_id))
+                                        self.tcx.def_path_str(trait_ref.def_id))
                             }
                         };
 
@@ -134,16 +134,16 @@ impl<'a, 'gcx, 'tcx> FnCtxt<'a, 'gcx, 'tcx> {
                                        item_span,
                                        "candidate #{} is defined in the trait `{}`",
                                        idx + 1,
-                                       self.tcx.item_path_str(trait_did));
+                                       self.tcx.def_path_str(trait_did));
                         } else {
                             span_note!(err,
                                        item_span,
                                        "the candidate is defined in the trait `{}`",
-                                       self.tcx.item_path_str(trait_did));
+                                       self.tcx.def_path_str(trait_did));
                         }
                         err.help(&format!("to disambiguate the method call, write `{}::{}({}{})` \
                                           instead",
-                                          self.tcx.item_path_str(trait_did),
+                                          self.tcx.def_path_str(trait_did),
                                           item_name,
                                           if rcvr_ty.is_region_ptr() && args.is_some() {
                                               if rcvr_ty.is_mutable_pointer() {
@@ -514,7 +514,7 @@ impl<'a, 'gcx, 'tcx> FnCtxt<'a, 'gcx, 'tcx> {
                 };
                 format!(
                     "use {};\n{}",
-                    with_crate_prefix(|| self.tcx.item_path_str(*did)),
+                    with_crate_prefix(|| self.tcx.def_path_str(*did)),
                     additional_newline
                 )
             });
@@ -528,14 +528,14 @@ impl<'a, 'gcx, 'tcx> FnCtxt<'a, 'gcx, 'tcx> {
                         &format!(
                             "\ncandidate #{}: `use {};`",
                             i + 1,
-                            with_crate_prefix(|| self.tcx.item_path_str(*trait_did))
+                            with_crate_prefix(|| self.tcx.def_path_str(*trait_did))
                         )
                     );
                 } else {
                     msg.push_str(
                         &format!(
                             "\n`use {};`",
-                            with_crate_prefix(|| self.tcx.item_path_str(*trait_did))
+                            with_crate_prefix(|| self.tcx.def_path_str(*trait_did))
                         )
                     );
                 }
@@ -636,7 +636,7 @@ impl<'a, 'gcx, 'tcx> FnCtxt<'a, 'gcx, 'tcx> {
             for (i, trait_info) in candidates.iter().enumerate() {
                 msg.push_str(&format!("\ncandidate #{}: `{}`",
                                       i + 1,
-                                      self.tcx.item_path_str(trait_info.def_id)));
+                                      self.tcx.def_path_str(trait_info.def_id)));
             }
             err.note(&msg[..]);
         }

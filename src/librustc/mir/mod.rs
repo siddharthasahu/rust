@@ -2,7 +2,7 @@
 //!
 //! [rustc guide]: https://rust-lang.github.io/rustc-guide/mir/index.html
 
-use hir::def::CtorKind;
+use hir::def::{CtorKind, Namespace};
 use hir::def_id::DefId;
 use hir::{self, HirId, InlineAsm};
 use mir::interpret::{ConstValue, EvalErrorKind, Scalar};
@@ -33,7 +33,7 @@ use ty::{
     self, AdtDef, CanonicalUserTypeAnnotations, ClosureSubsts, GeneratorSubsts, Region, Ty, TyCtxt,
     UserTypeAnnotationIndex,
 };
-use util::ppaux;
+use ty::print::{FmtPrinter, Printer};
 
 pub use mir::interpret::AssertMessage;
 
@@ -2043,7 +2043,7 @@ impl<'tcx> Debug for Place<'tcx> {
             Static(box self::Static { def_id, ty }) => write!(
                 fmt,
                 "({}: {:?})",
-                ty::tls::with(|tcx| tcx.item_path_str(def_id)),
+                ty::tls::with(|tcx| tcx.def_path_str(def_id)),
                 ty
             ),
             Promoted(ref promoted) => write!(fmt, "({:?}: {:?})", promoted.0, promoted.1),
@@ -2341,7 +2341,10 @@ impl<'tcx> Debug for Rvalue<'tcx> {
                 };
 
                 // When printing regions, add trailing space if necessary.
-                let region = if ppaux::verbose() || ppaux::identify_regions() {
+                let print_region = ty::tls::with(|tcx| {
+                    tcx.sess.verbose() || tcx.sess.opts.debugging_opts.identify_regions
+                });
+                let region = if print_region {
                     let mut region = region.to_string();
                     if region.len() > 0 {
                         region.push(' ');
@@ -2375,7 +2378,13 @@ impl<'tcx> Debug for Rvalue<'tcx> {
                     AggregateKind::Adt(adt_def, variant, substs, _user_ty, _) => {
                         let variant_def = &adt_def.variants[variant];
 
-                        ppaux::parameterized(fmt, substs, variant_def.did, &[])?;
+                        let f = &mut *fmt;
+                        ty::tls::with(|tcx| {
+                            let substs = tcx.lift(&substs).expect("could not lift for printing");
+                            FmtPrinter::new(tcx, f, Namespace::ValueNS)
+                                .print_def_path(variant_def.did, substs)?;
+                            Ok(())
+                        })?;
 
                         match variant_def.ctor_kind {
                             CtorKind::Const => Ok(()),
@@ -2699,7 +2708,7 @@ pub fn fmt_const_val(f: &mut impl Write, const_val: ty::Const<'_>) -> fmt::Resul
     }
     // print function definitions
     if let FnDef(did, _) = ty.sty {
-        return write!(f, "{}", item_path_str(did));
+        return write!(f, "{}", def_path_str(did));
     }
     // print string literals
     if let ConstValue::Slice(ptr, len) = value {
@@ -2724,8 +2733,8 @@ pub fn fmt_const_val(f: &mut impl Write, const_val: ty::Const<'_>) -> fmt::Resul
     write!(f, "{:?}:{}", value, ty)
 }
 
-fn item_path_str(def_id: DefId) -> String {
-    ty::tls::with(|tcx| tcx.item_path_str(def_id))
+fn def_path_str(def_id: DefId) -> String {
+    ty::tls::with(|tcx| tcx.def_path_str(def_id))
 }
 
 impl<'tcx> graph::DirectedGraph for Mir<'tcx> {

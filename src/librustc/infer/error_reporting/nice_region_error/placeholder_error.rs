@@ -1,3 +1,4 @@
+use hir::def::Namespace;
 use hir::def_id::DefId;
 use infer::error_reporting::nice_region_error::NiceRegionError;
 use infer::lexical_region_resolve::RegionResolutionError;
@@ -7,8 +8,10 @@ use traits::{ObligationCause, ObligationCauseCode};
 use ty;
 use ty::error::ExpectedFound;
 use ty::subst::Substs;
+use ty::print::Print;
 use util::common::ErrorReported;
-use util::ppaux::RegionHighlightMode;
+
+use std::fmt::Write;
 
 impl NiceRegionError<'me, 'gcx, 'tcx> {
     /// When given a `ConcreteFailure` for a function with arguments containing a named region and
@@ -186,7 +189,7 @@ impl NiceRegionError<'me, 'gcx, 'tcx> {
             cause.span(&self.tcx),
             &format!(
                 "implementation of `{}` is not general enough",
-                self.tcx.item_path_str(trait_def_id),
+                self.tcx.def_path_str(trait_def_id),
             ),
         );
 
@@ -194,7 +197,7 @@ impl NiceRegionError<'me, 'gcx, 'tcx> {
             ObligationCauseCode::ItemObligation(def_id) => {
                 err.note(&format!(
                     "Due to a where-clause on `{}`,",
-                    self.tcx.item_path_str(def_id),
+                    self.tcx.def_path_str(def_id),
                 ));
             }
             _ => (),
@@ -241,65 +244,65 @@ impl NiceRegionError<'me, 'gcx, 'tcx> {
             .tcx
             .any_free_region_meets(&actual_trait_ref.self_ty(), |r| Some(r) == vid);
 
-        RegionHighlightMode::maybe_highlighting_region(sub_placeholder, has_sub, || {
-            RegionHighlightMode::maybe_highlighting_region(sup_placeholder, has_sup, || {
-                match (has_sub, has_sup) {
-                    (Some(n1), Some(n2)) => {
-                        err.note(&format!(
-                            "`{}` must implement `{}` \
-                             for any two lifetimes `'{}` and `'{}`",
-                            expected_trait_ref.self_ty(),
-                            expected_trait_ref,
-                            std::cmp::min(n1, n2),
-                            std::cmp::max(n1, n2),
-                        ));
-                    }
-                    (Some(n), _) | (_, Some(n)) => {
-                        err.note(&format!(
-                            "`{}` must implement `{}` \
-                             for any lifetime `'{}`",
-                            expected_trait_ref.self_ty(),
-                            expected_trait_ref,
-                            n,
-                        ));
-                    }
-                    (None, None) => {
-                        err.note(&format!(
-                            "`{}` must implement `{}`",
-                            expected_trait_ref.self_ty(),
-                            expected_trait_ref,
-                        ));
-                    }
-                }
-            })
-        });
+        {
+            let mut note = String::new();
+            let mut printer = ty::print::FmtPrinter::new(self.tcx, &mut note, Namespace::TypeNS);
+            printer.region_highlight_mode.maybe_highlighting_region(sub_placeholder, has_sub);
+            printer.region_highlight_mode.maybe_highlighting_region(sup_placeholder, has_sup);
 
-        RegionHighlightMode::maybe_highlighting_region(vid, has_vid, || match has_vid {
-            Some(n) => {
-                if self_ty_has_vid {
-                    err.note(&format!(
-                        "but `{}` only implements `{}` for the lifetime `'{}`",
-                        actual_trait_ref.self_ty(),
-                        actual_trait_ref,
-                        n
-                    ));
-                } else {
-                    err.note(&format!(
-                        "but `{}` only implements `{}` for some lifetime `'{}`",
-                        actual_trait_ref.self_ty(),
-                        actual_trait_ref,
-                        n
-                    ));
+            let _ = (|| {
+                let mut cx = printer;
+                write!(cx, "`")?;
+                cx = expected_trait_ref.self_ty().print(cx)?;
+                write!(cx, "` must implement `")?;
+                cx = expected_trait_ref.print(cx)?;
+                write!(cx, "`")
+            })();
+
+            match (has_sub, has_sup) {
+                (Some(n1), Some(n2)) => {
+                    let _ = write!(note,
+                        " for any two lifetimes `'{}` and `'{}`",
+                        std::cmp::min(n1, n2),
+                        std::cmp::max(n1, n2),
+                    );
                 }
+                (Some(n), _) | (_, Some(n)) => {
+                    let _ = write!(note,
+                        " for any lifetime `'{}`",
+                        n,
+                    );
+                }
+                (None, None) => {}
             }
-            None => {
-                err.note(&format!(
-                    "but `{}` only implements `{}`",
-                    actual_trait_ref.self_ty(),
-                    actual_trait_ref,
-                ));
+
+            err.note(&note);
+        }
+
+        {
+            let mut note = String::new();
+            let mut printer = ty::print::FmtPrinter::new(self.tcx, &mut note, Namespace::TypeNS);
+            printer.region_highlight_mode.maybe_highlighting_region(vid, has_vid);
+
+            let _ = (|| {
+                let mut cx = printer;
+                write!(cx, "but `")?;
+                cx = actual_trait_ref.self_ty().print(cx)?;
+                write!(cx, "` only implements `")?;
+                cx = actual_trait_ref.print(cx)?;
+                write!(cx, "`")
+            })();
+
+            if let Some(n) = has_vid {
+                let _ = write!(note,
+                    " for {} lifetime `'{}`",
+                    if self_ty_has_vid { "the" } else { "some" },
+                    n
+                );
             }
-        });
+
+            err.note(&note);
+        }
 
         err.emit();
         ErrorReported

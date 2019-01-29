@@ -128,7 +128,7 @@ fn write_graph_label<'a, 'gcx, 'tcx, W: Write>(tcx: TyCtxt<'a, 'gcx, 'tcx>,
                                                mir: &Mir,
                                                w: &mut W)
                                                -> io::Result<()> {
-    write!(w, "    label=<fn {}(", dot::escape_html(&tcx.item_path_str(def_id)))?;
+    write!(w, "    label=<fn {}(", dot::escape_html(&tcx.def_path_str(def_id)))?;
 
     // fn argument types.
     for (i, arg) in mir.args_iter().enumerate() {
@@ -138,7 +138,7 @@ fn write_graph_label<'a, 'gcx, 'tcx, W: Write>(tcx: TyCtxt<'a, 'gcx, 'tcx>,
         write!(w, "{:?}: {}", Place::Local(arg), escape(&mir.local_decls[arg].ty))?;
     }
 
-    write!(w, ") -&gt; {}", escape(mir.return_ty()))?;
+    write!(w, ") -&gt; {}", escape(&mir.return_ty()))?;
     write!(w, r#"<br align="left"/>"#)?;
 
     for local in mir.vars_and_temps_iter() {

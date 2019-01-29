@@ -349,7 +349,7 @@ impl<'a, 'mir, 'tcx, M: Machine<'a, 'mir, 'tcx>> EvalContext<'a, 'mir, 'tcx, M> 
         use rustc_apfloat::ieee::{Single, Double};
         use rustc_apfloat::Float;
 
-        trace!("Running unary op {:?}: {:?} ({:?})", un_op, val, layout.ty.sty);
+        trace!("Running unary op {:?}: {:?} ({:?})", un_op, val, layout.ty);
 
         match layout.ty.sty {
             ty::Bool => {
