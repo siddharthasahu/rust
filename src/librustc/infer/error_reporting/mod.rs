@@ -446,6 +446,7 @@ impl<'a, 'gcx, 'tcx> InferCtxt<'a, 'gcx, 'tcx> {
         sp: Span,
     ) {
         use hir::def_id::CrateNum;
+        use hir::map::DisambiguatedDefPathData;
         use ty::print::Printer;
         use ty::subst::Kind;
 
@@ -505,6 +506,7 @@ impl<'a, 'gcx, 'tcx> InferCtxt<'a, 'gcx, 'tcx> {
             fn path_append_impl(
                 self,
                 _print_prefix: impl FnOnce(Self) -> Result<Self::Path, Self::Error>,
+                _disambiguated_data: &DisambiguatedDefPathData,
                 _self_ty: Ty<'tcx>,
                 _trait_ref: Option<ty::TraitRef<'tcx>>,
             ) -> Result<Self::Path, Self::Error> {
@@ -513,10 +515,10 @@ impl<'a, 'gcx, 'tcx> InferCtxt<'a, 'gcx, 'tcx> {
             fn path_append(
                 self,
                 print_prefix: impl FnOnce(Self) -> Result<Self::Path, Self::Error>,
-                text: &str,
+                disambiguated_data: &DisambiguatedDefPathData,
             ) -> Result<Self::Path, Self::Error> {
                 let mut path = print_prefix(self)?;
-                path.push(text.to_string());
+                path.push(disambiguated_data.data.as_interned_str().to_string());
                 Ok(path)
             }
             fn path_generic_args(
@@ -534,7 +536,7 @@ impl<'a, 'gcx, 'tcx> InferCtxt<'a, 'gcx, 'tcx> {
             if !(did1.is_local() || did2.is_local()) && did1.krate != did2.krate {
                 let abs_path = |def_id| {
                     AbsolutePathPrinter { tcx: self.tcx }
-                        .print_def_path(def_id, None)
+                        .print_def_path(def_id, &[])
                 };
 
                 // We compare strings because DefPath can be different

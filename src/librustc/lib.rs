@@ -60,7 +60,6 @@
 #![feature(test)]
 #![feature(in_band_lifetimes)]
 #![feature(crate_visibility_modifier)]
-#![feature(underscore_imports)]
 
 #![recursion_limit="512"]
 

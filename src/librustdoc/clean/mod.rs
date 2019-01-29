@@ -20,6 +20,7 @@ use rustc::mir::interpret::GlobalId;
 use rustc::hir::{self, GenericArg, HirVec};
 use rustc::hir::def::{self, Def, CtorKind};
 use rustc::hir::def_id::{CrateNum, DefId, CRATE_DEF_INDEX, LOCAL_CRATE};
+use rustc::hir::map::DisambiguatedDefPathData;
 use rustc::ty::subst::{Kind, Substs};
 use rustc::ty::{self, DefIdTree, TyCtxt, Region, RegionVid, Ty, AdtKind};
 use rustc::ty::fold::TypeFolder;
@@ -4108,6 +4109,7 @@ pub fn get_path_for_type(
         fn path_append_impl(
             self,
             print_prefix: impl FnOnce(Self) -> Result<Self::Path, Self::Error>,
+            _disambiguated_data: &DisambiguatedDefPathData,
             self_ty: Ty<'tcx>,
             trait_ref: Option<ty::TraitRef<'tcx>>,
         ) -> Result<Self::Path, Self::Error> {
@@ -4126,10 +4128,10 @@ pub fn get_path_for_type(
         fn path_append(
             self,
             print_prefix: impl FnOnce(Self) -> Result<Self::Path, Self::Error>,
-            text: &str,
+            disambiguated_data: &DisambiguatedDefPathData,
         ) -> Result<Self::Path, Self::Error> {
             let mut path = print_prefix(self)?;
-            path.push(text.to_string());
+            path.push(disambiguated_data.data.as_interned_str().to_string());
             Ok(path)
         }
         fn path_generic_args(
@@ -4142,7 +4144,7 @@ pub fn get_path_for_type(
     }
 
     let names = AbsolutePathPrinter { tcx: tcx.global_tcx() }
-        .print_def_path(def_id, None)
+        .print_def_path(def_id, &[])
         .unwrap();
 
     hir::Path {

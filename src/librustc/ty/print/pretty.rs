@@ -1,10 +1,10 @@
 use hir;
 use hir::def::Namespace;
-use hir::map::DefPathData;
+use hir::map::{DefPathData, DisambiguatedDefPathData};
 use hir::def_id::{CrateNum, DefId, CRATE_DEF_INDEX, LOCAL_CRATE};
 use middle::region;
 use ty::{self, DefIdTree, Ty, TyCtxt, TypeFoldable};
-use ty::subst::{Kind, Subst, Substs, UnpackedKind};
+use ty::subst::{Kind, Subst, UnpackedKind};
 use middle::cstore::{ExternCrate, ExternCrateSource};
 use syntax::symbol::{keywords, Symbol};
 
@@ -178,7 +178,7 @@ pub trait PrettyPrinter<'gcx: 'tcx, 'tcx>:
     fn print_value_path(
         self,
         def_id: DefId,
-        substs: Option<&'tcx Substs<'tcx>>,
+        substs: &'tcx [Kind<'tcx>],
     ) -> Result<Self::Path, Self::Error> {
         self.print_def_path(def_id, substs)
     }
@@ -264,7 +264,7 @@ pub trait PrettyPrinter<'gcx: 'tcx, 'tcx>:
                 }) => {
                     debug!("try_print_visible_def_path: def_id={:?}", def_id);
                     return Ok((if !span.is_dummy() {
-                        self.print_def_path(def_id, None)?
+                        self.print_def_path(def_id, &[])?
                     } else {
                         self.path_crate(cnum)?
                     }, true));
@@ -313,13 +313,13 @@ pub trait PrettyPrinter<'gcx: 'tcx, 'tcx>:
             visible_parent, actual_parent,
         );
 
-        let data = cur_def_key.disambiguated_data.data;
+        let mut data = cur_def_key.disambiguated_data.data;
         debug!(
             "try_print_visible_def_path: data={:?} visible_parent={:?} actual_parent={:?}",
             data, visible_parent, actual_parent,
         );
 
-        let symbol = match data {
+        match data {
             // In order to output a path that could actually be imported (valid and visible),
             // we need to handle re-exports correctly.
             //
@@ -351,27 +351,30 @@ pub trait PrettyPrinter<'gcx: 'tcx, 'tcx>:
             // the children of the visible parent (as was done when computing
             // `visible_parent_map`), looking for the specific child we currently have and then
             // have access to the re-exported name.
-            DefPathData::Module(actual_name) |
-            DefPathData::TypeNs(actual_name) if Some(visible_parent) != actual_parent => {
-                self.tcx().item_children(visible_parent)
+            DefPathData::Module(ref mut name) |
+            DefPathData::TypeNs(ref mut name) if Some(visible_parent) != actual_parent => {
+                let reexport = self.tcx().item_children(visible_parent)
                     .iter()
                     .find(|child| child.def.def_id() == def_id)
-                    .map(|child| child.ident.as_str())
-                    .unwrap_or_else(|| actual_name.as_str())
+                    .map(|child| child.ident.as_interned_str());
+                if let Some(reexport) = reexport {
+                    *name = reexport;
+                }
             }
-            _ => {
-                data.get_opt_name().map(|n| n.as_str()).unwrap_or_else(|| {
-                    // Re-exported `extern crate` (#43189).
-                    if let DefPathData::CrateRoot = data {
-                        self.tcx().original_crate_name(def_id.krate).as_str()
-                    } else {
-                        Symbol::intern("<unnamed>").as_str()
-                    }
-                })
-            },
-        };
-        debug!("try_print_visible_def_path: symbol={:?}", symbol);
-        Ok((self.path_append(Ok, &symbol)?, true))
+            // Re-exported `extern crate` (#43189).
+            DefPathData::CrateRoot => {
+                data = DefPathData::Module(
+                    self.tcx().original_crate_name(def_id.krate).as_interned_str(),
+                );
+            }
+            _ => {}
+        }
+        debug!("try_print_visible_def_path: data={:?}", data);
+
+        Ok((self.path_append(Ok, &DisambiguatedDefPathData {
+            data,
+            disambiguator: 0,
+        })?, true))
     }
 
     fn pretty_path_qualified(
@@ -469,8 +472,7 @@ pub trait PrettyPrinter<'gcx: 'tcx, 'tcx>:
             }
             ty::FnDef(def_id, substs) => {
                 let sig = self.tcx().fn_sig(def_id).subst(self.tcx(), substs);
-                p!(print(sig),
-                   write(" {{"), print_value_path(def_id, Some(substs)), write("}}"));
+                p!(print(sig), write(" {{"), print_value_path(def_id, substs), write("}}"));
             }
             ty::FnPtr(ref bare_fn) => {
                 p!(print(bare_fn))
@@ -492,7 +494,7 @@ pub trait PrettyPrinter<'gcx: 'tcx, 'tcx>:
                 }
             }
             ty::Adt(def, substs) => {
-                p!(print_def_path(def.did, Some(substs)));
+                p!(print_def_path(def.did, substs));
             }
             ty::Dynamic(data, r) => {
                 let print_r = self.region_should_not_be_omitted(r);
@@ -505,7 +507,7 @@ pub trait PrettyPrinter<'gcx: 'tcx, 'tcx>:
                 }
             }
             ty::Foreign(def_id) => {
-                p!(print_def_path(def_id, None));
+                p!(print_def_path(def_id, &[]));
             }
             ty::Projection(ref data) => p!(print(data)),
             ty::UnnormalizedProjection(ref data) => {
@@ -678,7 +680,7 @@ pub trait PrettyPrinter<'gcx: 'tcx, 'tcx>:
         let mut first = true;
 
         if let Some(principal) = predicates.principal() {
-            p!(print_def_path(principal.def_id, None));
+            p!(print_def_path(principal.def_id, &[]));
 
             let mut resugared = false;
 
@@ -761,7 +763,7 @@ pub trait PrettyPrinter<'gcx: 'tcx, 'tcx>:
             }
             first = false;
 
-            p!(print_def_path(def_id, None));
+            p!(print_def_path(def_id, &[]));
         }
 
         Ok(self)
@@ -865,7 +867,7 @@ impl TyCtxt<'_, '_, '_> {
         debug!("def_path_str: def_id={:?}, ns={:?}", def_id, ns);
         let mut s = String::new();
         let _ = FmtPrinter::new(self, &mut s, ns)
-            .print_def_path(def_id, None);
+            .print_def_path(def_id, &[]);
         s
     }
 }
@@ -891,21 +893,13 @@ impl<F: fmt::Write> Printer<'gcx, 'tcx> for FmtPrinter<'_, 'gcx, 'tcx, F> {
     fn print_def_path(
         mut self,
         def_id: DefId,
-        substs: Option<&'tcx Substs<'tcx>>,
+        substs: &'tcx [Kind<'tcx>],
     ) -> Result<Self::Path, Self::Error> {
         define_scoped_cx!(self);
 
-        // FIXME(eddyb) avoid querying `tcx.generics_of` and `tcx.def_key`
-        // both here and in `default_print_def_path`.
-        let generics = substs.map(|_| self.tcx.generics_of(def_id));
-        if generics.as_ref().and_then(|g| g.parent).is_none() {
+        if substs.is_empty() {
             match self.try_print_visible_def_path(def_id)? {
-                (cx, true) => return if let (Some(generics), Some(substs)) = (generics, substs) {
-                    let args = cx.generic_args_to_print(generics, substs);
-                    cx.path_generic_args(Ok, args)
-                } else {
-                    Ok(cx)
-                },
+                (cx, true) => return Ok(cx),
                 (cx, false) => self = cx,
             }
         }
@@ -927,10 +921,18 @@ impl<F: fmt::Write> Printer<'gcx, 'tcx> for FmtPrinter<'_, 'gcx, 'tcx, F> {
                 // only occur very early in the compiler pipeline.
                 let parent_def_id = DefId { index: key.parent.unwrap(), ..def_id };
                 let span = self.tcx.def_span(def_id);
-                return self.path_append(
-                    |cx| cx.print_def_path(parent_def_id, None),
-                    &format!("<impl at {:?}>", span),
-                );
+
+                self = self.print_def_path(parent_def_id, &[])?;
+
+                // HACK(eddyb) copy of `path_append` to avoid
+                // constructing a `DisambiguatedDefPathData`.
+                if !self.empty_path {
+                    write!(self, "::")?;
+                }
+                write!(self, "<impl at {:?}>", span)?;
+                self.empty_path = false;
+
+                return Ok(self);
             }
         }
 
@@ -990,6 +992,7 @@ impl<F: fmt::Write> Printer<'gcx, 'tcx> for FmtPrinter<'_, 'gcx, 'tcx, F> {
     fn path_append_impl(
         mut self,
         print_prefix: impl FnOnce(Self) -> Result<Self::Path, Self::Error>,
+        _disambiguated_data: &DisambiguatedDefPathData,
         self_ty: Ty<'tcx>,
         trait_ref: Option<ty::TraitRef<'tcx>>,
     ) -> Result<Self::Path, Self::Error> {
@@ -1007,17 +1010,35 @@ impl<F: fmt::Write> Printer<'gcx, 'tcx> for FmtPrinter<'_, 'gcx, 'tcx, F> {
     fn path_append(
         mut self,
         print_prefix: impl FnOnce(Self) -> Result<Self::Path, Self::Error>,
-        text: &str,
+        disambiguated_data: &DisambiguatedDefPathData,
     ) -> Result<Self::Path, Self::Error> {
         self = print_prefix(self)?;
 
-        // FIXME(eddyb) `text` should never be empty, but it
+        // Skip `::{{constructor}}` on tuple/unit structs.
+        match disambiguated_data.data {
+            DefPathData::StructCtor => return Ok(self),
+            _ => {}
+        }
+
+        // FIXME(eddyb) `name` should never be empty, but it
         // currently is for `extern { ... }` "foreign modules".
-        if !text.is_empty() {
+        let name = disambiguated_data.data.as_interned_str().as_str();
+        if !name.is_empty() {
             if !self.empty_path {
                 write!(self, "::")?;
             }
-            write!(self, "{}", text)?;
+            write!(self, "{}", name)?;
+
+            // FIXME(eddyb) this will print e.g. `{{closure}}#3`, but it
+            // might be nicer to use something else, e.g. `{closure#3}`.
+            let dis = disambiguated_data.disambiguator;
+            let print_dis =
+                disambiguated_data.data.get_opt_name().is_none() ||
+                dis != 0 && self.tcx.sess.verbose();
+            if print_dis {
+                write!(self, "#{}", dis)?;
+            }
+
             self.empty_path = false;
         }
 
@@ -1059,7 +1080,7 @@ impl<F: fmt::Write> PrettyPrinter<'gcx, 'tcx> for FmtPrinter<'_, 'gcx, 'tcx, F> 
     fn print_value_path(
         mut self,
         def_id: DefId,
-        substs: Option<&'tcx Substs<'tcx>>,
+        substs: &'tcx [Kind<'tcx>],
     ) -> Result<Self::Path, Self::Error> {
         let was_in_value = std::mem::replace(&mut self.in_value, true);
         self = self.print_def_path(def_id, substs)?;
@@ -1462,7 +1483,7 @@ define_print_and_forward_display! {
             ty::ExistentialPredicate::Trait(x) => p!(print(x)),
             ty::ExistentialPredicate::Projection(x) => p!(print(x)),
             ty::ExistentialPredicate::AutoTrait(def_id) => {
-                p!(print_def_path(def_id, None));
+                p!(print_def_path(def_id, &[]));
             }
         }
     }
@@ -1495,7 +1516,7 @@ define_print_and_forward_display! {
     }
 
     ty::TraitRef<'tcx> {
-        p!(print_def_path(self.def_id, Some(self.substs)));
+        p!(print_def_path(self.def_id, self.substs));
     }
 
     ty::ParamTy {
@@ -1515,7 +1536,7 @@ define_print_and_forward_display! {
     }
 
     ty::ProjectionTy<'tcx> {
-        p!(print_def_path(self.item_def_id, Some(self.substs)));
+        p!(print_def_path(self.item_def_id, self.substs));
     }
 
     ty::ClosureKind {
@@ -1536,17 +1557,17 @@ define_print_and_forward_display! {
             ty::Predicate::WellFormed(ty) => p!(print(ty), write(" well-formed")),
             ty::Predicate::ObjectSafe(trait_def_id) => {
                 p!(write("the trait `"),
-                   print_def_path(trait_def_id, None),
+                   print_def_path(trait_def_id, &[]),
                    write("` is object-safe"))
             }
             ty::Predicate::ClosureKind(closure_def_id, _closure_substs, kind) => {
                 p!(write("the closure `"),
-                   print_value_path(closure_def_id, None),
+                   print_value_path(closure_def_id, &[]),
                    write("` implements the trait `{}`", kind))
             }
             ty::Predicate::ConstEvaluatable(def_id, substs) => {
                 p!(write("the constant `"),
-                   print_value_path(def_id, Some(substs)),
+                   print_value_path(def_id, substs),
                    write("` can be evaluated"))
             }
         }
