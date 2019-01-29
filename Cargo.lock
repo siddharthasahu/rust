@@ -2366,15 +2366,15 @@ dependencies = [
 name = "rustc-demangle"
 version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-dependencies = [
- "compiler_builtins 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "rustc-std-workspace-core 1.0.0",
-]
 
 [[package]]
 name = "rustc-demangle"
 version = "0.1.13"
 source = "git+https://github.com/eddyb/rustc-demangle?rev=20d5bcc9bcea0d9413540916dd5f9fdadc7012f7#20d5bcc9bcea0d9413540916dd5f9fdadc7012f7"
+dependencies = [
+ "compiler_builtins 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rustc-std-workspace-core 1.0.0",
+]
 
 [[package]]
 name = "rustc-hash"
@@ -2497,7 +2497,7 @@ dependencies = [
  "cc 1.0.28 (registry+https://github.com/rust-lang/crates.io-index)",
  "memmap 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "num_cpus 1.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "rustc-demangle 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rustc-demangle 0.1.13 (git+https://github.com/eddyb/rustc-demangle?rev=20d5bcc9bcea0d9413540916dd5f9fdadc7012f7)",
  "rustc_llvm 0.0.0",
 ]
 
@@ -2513,7 +2513,7 @@ dependencies = [
  "memmap 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "num_cpus 1.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc 0.0.0",
- "rustc-demangle 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rustc-demangle 0.1.13 (git+https://github.com/eddyb/rustc-demangle?rev=20d5bcc9bcea0d9413540916dd5f9fdadc7012f7)",
  "rustc_allocator 0.0.0",
  "rustc_apfloat 0.0.0",
  "rustc_codegen_utils 0.0.0",
@@ -3094,7 +3094,7 @@ dependencies = [
  "panic_unwind 0.0.0",
  "profiler_builtins 0.0.0",
  "rand 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "rustc-demangle 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rustc-demangle 0.1.13 (git+https://github.com/eddyb/rustc-demangle?rev=20d5bcc9bcea0d9413540916dd5f9fdadc7012f7)",
  "rustc_asan 0.0.0",
  "rustc_lsan 0.0.0",
  "rustc_msan 0.0.0",

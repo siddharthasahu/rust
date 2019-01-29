@@ -41,6 +41,19 @@ fn expected(fn_name: &str) -> String {
     format!(" backtrace::{}", fn_name)
 }
 
+fn contains_expected_full(s: &str, fn_name: &str) -> bool {
+    // HACK(eddyb) work around the fact that RUST_BACKTRACE=full
+    // (or, as is the case here, stack traces from panic-in-panic)
+    // prints symbols with hashes in them, i.e. `backtrace[...]::`.
+    let prefix = " backtrace[";
+    let suffix = &format!("]::{}", fn_name);
+    s.match_indices(prefix).any(|(i, _)| {
+        s[i + prefix.len()..]
+            .trim_start_matches(char::is_alphanumeric)
+            .starts_with(suffix)
+    })
+}
+
 fn runtest(me: &str) {
     // Make sure that the stack trace is printed
     let p = template(me).arg("fail").env("RUST_BACKTRACE", "1").spawn().unwrap();
@@ -78,7 +91,7 @@ fn runtest(me: &str) {
     let s = str::from_utf8(&out.stderr).unwrap();
     // loosened the following from double::h to double:: due to
     // spurious failures on mac, 32bit, optimized
-    assert!(s.contains("stack backtrace") && s.contains(&expected("double")),
+    assert!(s.contains("stack backtrace") && contains_expected_full(s, "double"),
             "bad output3: {}", s);
 
     // Make sure a stack trace isn't printed too many times
