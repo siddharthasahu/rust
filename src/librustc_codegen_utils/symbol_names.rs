@@ -106,6 +106,8 @@ use syntax_pos::symbol::Symbol;
 use std::fmt::{self, Write};
 use std::mem::{self, discriminant};
 
+mod dump;
+mod mw;
 mod new;
 
 pub fn provide(providers: &mut Providers) {
@@ -338,7 +340,11 @@ fn compute_mangled_symbol_name(tcx: TyCtxt<'_, 'tcx, 'tcx>, instance: Instance<'
         sanitize(&mut buf.temp_buf, "{{vtable-shim}}");
     }
 
-    buf.finish(hash)
+    let mangled_symbol = buf.finish(hash);
+
+    return dump::record(tcx, instance, &mangled_symbol, hash);
+
+    // mangled_symbol
 }
 
 // Follow C++ namespace-mangling style, see
